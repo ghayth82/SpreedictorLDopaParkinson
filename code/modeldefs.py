@@ -213,7 +213,7 @@ modeldefs = { 'conv_30_100': (model_conv_glob, (30,100)),
 
                 'logreg' : (model_logreg, (0,)),
                 'conv_30_10' : (model_conv_glob, (30,10)),
-                'conv2l_30_10_10_40_5': (model_conv_2l_glob, (30,10,10,40,5)),
+                #'conv2l_30_10_10_40_5': (model_conv_2l_glob, (30,10,10,40,5)),
                 #'convlstm_30_300_10_20': (model_gauss_conv_lstm, (30,300,10,20)),
                 #'ffnn_64' : (model_ff, (64,32)),
 }

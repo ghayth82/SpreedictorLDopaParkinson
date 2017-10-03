@@ -300,12 +300,26 @@ class MergeClassifier(Classifier):
 
 if __name__ == "__main__":
 
-    combs = {'alldata.integration1': [('svdrotout', 'conv2l_30_300_10_40_30_rofl'),
+    combs = {
+        'alldata.integration1': [('svdrotout', 'conv2l_30_300_10_40_30_rofl'),
         ('flprotres','conv2l_30_300_10_40_30_rofl'),
         ('rrotret','conv2l_30_300_10_20_30_rofl'),
         ('fhpwcuaout','conv3l_50_300_10_20_30_10_10_rofl'),
         ('fbpwcuares','conv2l_50_300_10_40_30_rofl'),
-        ('fhpwcuaret','conv2l_30_300_10_40_30_rofl')] }
+        ('fhpwcuaret','conv2l_30_300_10_40_30_rofl')],
+        'alldata.integration2': [('svdrotout', 'conv2l_30_300_10_40_30_rofl'),
+        ('flprotres','conv2l_30_300_10_40_30_rofl'),
+        ('rrotret','conv2l_30_300_10_20_30_rofl'),
+        ('fhpwcuaout','conv2l_50_300_10_40_30_rofl'),
+        ('fbpwcuares','conv2l_50_300_10_40_30_rofl'),
+        ('fhpwcuaret','conv2l_30_300_10_40_30_rofl')],
+        'alldata.integration3': [('svdrotout', 'conv2l_30_300_10_40_30_rofl'),
+        ('flprotres','conv2l_30_300_10_40_30_rofl'),
+        ('rrotret','conv2l_30_300_10_20_30_rofl'),
+        ('fhpwcuaout','conv2l_50_300_10_20_30_rofl'),
+        ('fbpwcuares','conv2l_50_300_10_40_30_rofl'),
+        ('fhpwcuaret','conv2l_30_300_10_40_30_rofl')]
+    }
 
     import argparse
     from argparse import RawTextHelpFormatter
