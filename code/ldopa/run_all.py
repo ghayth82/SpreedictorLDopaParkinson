@@ -2,9 +2,10 @@
 import itertools
 import synapseclient
 from modeldefs import modeldefs
-from datamanagement.datasets import dataset
+from datamanagement.datasets import dataset, get_dataset
 from classifier import Classifier
 import numpy as np
+import os
 
 import argparse
 from argparse import RawTextHelpFormatter
@@ -16,6 +17,9 @@ parser.add_argument('-df', dest='datafilter', nargs = '*', default = [''],
         help = "Filter for datasets")
 parser.add_argument('-mf', dest="modelfilter", nargs = '*',
         default = [''], help = "Filter for model definitions")
+
+parser.add_argument('--overwrite', dest="overwrite", action='store_true',
+        default=False, help = "Overwrite existing analyses")
 
 parser.add_argument('--epochs', dest="epochs", type=int,
         default = 30, help = "Number of epochs")
@@ -30,8 +34,6 @@ parser.add_argument('--flip', dest="flip", action='store_true',
         default=False, help = "Augment by flipping the sign")
 parser.add_argument('--rofl', dest="rofl", action='store_true',
         default=False, help = "Augment by flipping the sign and rotating")
-parser.add_argument('--dry', dest="dry", action='store_true',
-        default=False, help = "Only lists the combinations to be computed, but does not actually compute them.")
 
 args = parser.parse_args()
 print(args.datafilter)
@@ -53,32 +55,13 @@ for comb in all_combinations:
     #name = '.'.join([args.data, args.model])
 
     print("Running {}-{}".format(comb[0],comb[1]))
-    if args.dry:
-        continue
-
     name = '.'.join(comb)
     #continue
-    print("--noise {}".format(args.noise))
 
-    if args.noise:
-        name = '_'.join([name, "aug"])
-    print(name)
-    print("--rotate {}".format(args.rotate))
-    if args.rotate:
-        name = '_'.join([name, "rot"])
-    print(name)
-    print("--flip {}".format(args.flip))
-    if args.flip:
-        name = '_'.join([name, "flip"])
-    print(name)
-    print("--rofl {}".format(args.rofl))
-    if args.rofl:
-        name = '_'.join([name, "rofl"])
-    print(name)
 
     da = {}
     for k in dataset[comb[0]].keys():
-        da[k] = dataset[comb[0]][k]()
+        da[k] = get_dataset(dataset[comb[0]][k])
         if args.noise:
             da[k].transformData = da[k].transformDataNoise
         if args.rotate:
@@ -88,8 +71,13 @@ for comb in all_combinations:
         if args.rofl:
             da[k].transformData = da[k].transformDataFlipRotate
 
+
     model = Classifier(da, modeldefs[comb[1]], name=name, epochs = args.epochs)
 
-    model.fit(args.noise|args.rotate|args.flip|args.rofl)
-    model.saveModel()
-    model.evaluate()
+    if model.summaryExists() and not args.overwrite:
+        print "{} exists, skipping".format(os.path.basename(model.summary_file))
+    else:
+        model.fit(args.noise|args.rotate|args.flip|args.rofl)
+
+        #TODO: not yet implemented (save all LOOC models? or which ones? train model with all subjects?)
+        #model.saveModel()
