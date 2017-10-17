@@ -6,6 +6,7 @@ from ldopa_data import LDopa
 import progressbar
 from keras.utils.np_utils import to_categorical
 import pandas as pd
+from .utils import batchRandomRotation
 
 
 datadir = os.getenv('PARKINSON_DREAM_LDOPA_DATA')
@@ -32,10 +33,12 @@ class NumpyDataset(object):
 
             outcome_var = outcome_vars[self.outcome]
 
-            cdtask = ld.commondescr[(ld.commondescr["task"] == self.task) & ~(ld.commondescr[outcome_var].isnull())]
+            cdtask = ld.commondescr[(ld.commondescr["task"] == self.task) & \
+                    ~(ld.commondescr[outcome_var].isnull())]
             nrows = cdtask.shape[0]
 
-            if self.task in ['ftnl1', 'ftnl2', 'ftnr1', 'ftnr2','ramr1','ramr2','raml1','raml2']:
+            if self.task in ['ftnl1', 'ftnl2', 'ftnr1', 'ftnr2',\
+                'ramr1','ramr2','raml1','raml2']:
                 ndatapoints = 1000
             else:
                 ndatapoints = 2000
@@ -79,6 +82,23 @@ class NumpyDataset(object):
         else:
             return data
 
+    def transformDataNoise(self, data):
+        return data + np.random.normal(scale=np.sqrt(0.1), size=data.shape)
+
+    def transformDataRotate(self, data):
+        return batchRandomRotation(data)
+
+    def transformDataFlipSign(self, data):
+        for t in range(data.shape[0]):
+            data[t] = np.matmul(data[t], np.diag(np.random.choice([1,-1], 3)))
+
+        return data
+
+    def transformDataFlipRotate(self, data):
+        data = self.transformDataRotate(data)
+        data = self.transformDataFlipSign(data)
+
+        return data
 
 
     @property

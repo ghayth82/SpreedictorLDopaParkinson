@@ -26,9 +26,10 @@ def get_dataset_names(data_transform):
 # - fh_[cutoff]     high-pass filter, [cutoff] = cutoff frequency
 # - fl_[cutoff]     low-pass filter, [cutoff] = cutoff frequency
 # - fb_[low]_[high] band-pass filter, [low], [high] = cutoff frequencies
-dataset_names = get_dataset_names('r') \
+dataset_names = get_dataset_names('raw') \
                 + get_dataset_names('fh_1') \
                 + get_dataset_names('fh_2') \
+                + get_dataset_names('fh_0.5') \
                 + get_dataset_names('fb_1_20')
 
 
@@ -37,14 +38,14 @@ dataset = dict(zip(dataset_names, [{'input_1' : x} for x in dataset_names]))
 
 
 def get_dataset(name, reload_ = False):
-    (data_type, outcome, task) = name.split('-')
+    (data_transform, outcome, task) = name.split('-')
 
-    if data_type == 'r':
+    if data_transform == 'raw':
         return RawData(outcome, task, reload_=reload_)
-    elif data_type[0] == 'f':
-        filter_type = {'b' : 'band', 'h' : 'high', 'l' : 'low'}[data_type[1]]
-        freqs = [float(x) for x in data_type.split('_')[1:]]
+    elif data_transform[0] == 'f':
+        filter_type = {'b' : 'band', 'h' : 'high', 'l' : 'low'}[data_transform[1]]
+        freqs = [float(x) for x in data_transform.split('_')[1:]]
 
         return FilteredData(outcome, task, filter_type, freqs, reload_=reload_)
     else:
-        raise Exception('Unknown data type:', data_type)
+        raise Exception('Unknown data type:', data_transform)

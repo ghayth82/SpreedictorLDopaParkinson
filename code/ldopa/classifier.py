@@ -1,4 +1,6 @@
-from datamanagement.datasets import dataset
+from datamanagement.datasets import dataset, get_dataset
+#from datamanagement.utils import batchRandomRotation
+from datamanagement.utils import batchRandomRotation
 from modeldefs import modeldefs
 import logging
 import itertools
@@ -13,12 +15,28 @@ set_session(tf.Session(config=config))
 
 from keras.models import Model, load_model
 from keras.layers import Dense
+from keras import backend as K
 from sklearn.model_selection import train_test_split
 import pandas as pd
 import numpy as np
 import os
 from sklearn import metrics
 import sys
+
+
+def log_choose(n, k):
+    x = K.epsilon()
+    for i in range(n):
+        x += K.log(i)
+    for i in range(k):
+        x -= K.log(i)
+    for i in range(n-k):
+        x -= K.log(i)
+    return x
+
+def binomial_loss(y_true, y_pred):
+    return K.mean(-log_choose(4, y_true) - y_true*K.log(y_pred) - (4-y_true)*K.log(1-y_pred))
+
 
 outputdir = os.getenv('PARKINSON_DREAM_LDOPA_DATA')
 
@@ -60,7 +78,15 @@ def generate_predict_data(dataset, indices, batchsize, augment = True):
             yield Xinput
 
 class Classifier(object):
-    def __init__(self, datadict, model_definition, name, epochs,
+    n_outputs = {'bra':1, 'dys':1, 'tre':5}
+    act_fct = {'bra':'sigmoid', 'dys':'sigmoid', 'tre':'softmax'}
+    loss_fct = {'bra':'binary_crossentropy', 'dys': 'binary_crossentropy',
+            'tre': 'categorical_crossentropy'}
+    # todo evaluation method also depends on task.
+    # AUC for 'bra' and 'dys' and perhaps prediction probability (PR) for 'tre'
+
+
+    def __init__(self, datadict, model_definition, comb, epochs,
         logs = "model.log", overwrite = False):
         '''
         :input: is a class that contains the input for the prediction
@@ -75,10 +101,12 @@ class Classifier(object):
             level = logging.DEBUG,
             format = '%(asctime)s:%(name)s:%(message)s',
             datefmt = '%m/%d/%Y %I:%M:%S')
-        self.logger = logging.getLogger(name)
 
-        self.name = name
-        self.outcome_score = name.split('-')[1] #tre, bra or dys
+        self.name = '.'.join(comb)
+        self.comb = comb
+        self.logger = logging.getLogger(self.name)
+
+        self.outcome_score = comb[0].split('-')[1] #tre, bra or dys
         self.data = datadict
         self.batchsize = 100
 
@@ -90,6 +118,12 @@ class Classifier(object):
         hcdf["nsamples"] = hcdf['patientId'].map(lambda r: hcvc[r])
         self.sample_weights = 1. / hcdf["nsamples"].values
 
+
+        self.logger.info("Input dimensions:")
+        for k in datadict:
+            self.logger.info("\t{}: {} x {}".format(k, len(datadict[k]),
+                                    datadict[k].shape))
+
         self.modelfct = model_definition[0]
         self.modelparams = model_definition[1]
         self.epochs = epochs
@@ -98,45 +132,33 @@ class Classifier(object):
         if not os.path.exists(self.summary_path):
             os.makedirs(self.summary_path)
 
-        self.ind_summary_path = os.path.join(self.summary_path, "individual")
-        if not os.path.exists(self.ind_summary_path):
-            os.makedirs(self.ind_summary_path)
-
-
         self.summary_file = os.path.join(self.summary_path, self.name + ".csv")
-        self.ind_summary_file = os.path.join(self.ind_summary_path, self.name + ".csv")
+
 
     def summaryExists(self):
-        return os.path.isfile(self.ind_summary_file)
+        return os.path.isfile(self.summary_file)
 
 
     def defineModel(self):
 
         inputs, outputs = self.modelfct(self.data, self.modelparams)
 
-        if self.outcome_score in ['bra', 'dys']:
-            loss_fct = 'binary_crossentropy'
-            n_outputs = 1
-        elif self.outcome_score == 'tre':
-            loss_fct = 'categorical_crossentropy'
-            n_outputs = 5
-        else:
-            raise Exception('Unknown outcome score "{}"'.format(self.outcome_score))
-
-        outputs = Dense(n_outputs, activation='sigmoid', name="main_output")(outputs)
+        outputs = Dense(self.n_outputs[self.outcome_score],
+            activation=self.act_fct[self.outcome_score],
+            name="main_output")(outputs)
 
         model = Model(inputs = inputs, outputs = outputs)
-        model.compile(loss=loss_fct,
+        model.compile(loss=self.loss_fct[self.outcome_score],
                     optimizer='adadelta',
                     metrics=['accuracy'])
 
-        model.summary()
-        model.summary(print_fn = self.logger.info)
-
         return model
+
 
     def fit(self, augment = True):
         self.logger.info("Start training ...")
+
+
 
         bs = self.batchsize
 
@@ -145,21 +167,26 @@ class Classifier(object):
 
         perf = pd.DataFrame()
 
+        predictions = np.zeros((len(patient_id),
+                self.n_outputs[self.outcome_score]),dtype="float32")
+
+        ## Perform one-hold-out cross-validation
         for i_lo, leave_out in enumerate(individuals):
             # reinit model in every loop
 
             print '#' * 85
-            print 'Running {} excluding subject {} ({}/{})'.format(self.name, leave_out, i_lo + 1, len(individuals))
+            print 'Running {} excluding subject {} ({}/{})'.format(self.name,
+                leave_out, i_lo + 1, len(individuals))
             print '#' * 85
 
-            self.dnn = self.defineModel()
+            tmpmodel = self.defineModel()
 
             train_individuals = np.setdiff1d(individuals, [leave_out])
 
             train_idxs = np.where(np.in1d(patient_id, train_individuals))
             validate_idxs = np.where(np.in1d(patient_id, leave_out))
 
-            history = self.dnn.fit_generator(
+            history = tmpmodel.fit_generator(
                 generate_fit_data(self.data, train_idxs, self.sample_weights, bs,
                         augment),
                 steps_per_epoch = len(train_idxs)//bs + \
@@ -171,34 +198,55 @@ class Classifier(object):
                 leave_out, self.epochs, history.history["loss"][-1], history.history["acc"][-1]
             ))
 
-            perf = perf.append(self.evaluate(train_idxs, validate_idxs, leave_out))
+            # predict on held-out subject
+            rest = 1 if len(validate_idxs)%self.batchsize > 0 else 0
+
+            predictions[validate_idxs] = tmpmodel.predict_generator(
+                generate_predict_data(self.data,
+                validate_idxs, self.batchsize, False),
+                steps = len(validate_idxs)//self.batchsize + rest)
+
+            #perf = perf.append(self.evaluate(train_idxs, validate_idxs, leave_out))
 
         self.logger.info("Finished training ...")
 
-        perf_summary = perf.drop(["dataset", "model", "subject_left_out"], axis=1)\
-            .apply([np.mean, np.std])\
-            .transpose()\
-            .reset_index()\
-            .values.ravel()
+        perf = self.evaluate(predictions)
 
-        f = open(self.summary_file, 'w')
-        f.write(("{}\t{:.3f}\t(+-{:.3f})\t" * 4).format(*perf_summary))
-        f.write(self.name.replace('.', '\t'))
-        f.write('\n')
-        f.close()
-
-        perf.to_csv(self.ind_summary_file,
-                    header=True, index=False, sep="\t")
+        perf.to_csv(self.summary_file, header=False, index=False, sep="\t")
 
         self.logger.info("Results written to {}".format(os.path.basename(self.summary_file)))
 
+        # finally with the re-train the model with all subjects
+        train_idxs = np.arange(len(patient_id))
+        self.dnn = self.defineModel()
+
+        history = self.dnn.fit_generator(
+            generate_fit_data(self.data, train_idxs, self.sample_weights, bs,
+                    augment),
+            steps_per_epoch = len(train_idxs)//bs + \
+                (1 if len(train_idxs)%bs > 0 else 0),
+            epochs = self.epochs, use_multiprocessing = True)
+
+        predictions = tmpmodel.predict_generator(
+            generate_predict_data(self.data,
+            train_idxs, self.batchsize, False),
+            steps = len(train_idxs)//self.batchsize +\
+             (1 if len(train_idxs)//self.batchsize > 0 else 0))
+
+        perf = self.evaluate(predictions)
+
+        with open(self.summary_file, "a") as f:
+            perf.to_csv(f, header=False, index=False, sep="\t")
+
+        self.dnn.summary()
+        self.dnn.summary(print_fn = self.logger.info)
+
     def saveModel(self):
-        raise Exception('Not implemented: Which model should be saved?')
-        #if not os.path.exists(outputdir + "/models/"):
-        #    os.mkdir(outputdir + "/models/")
-        #filename = outputdir + "/models/" + self.name + ".h5"
-        #self.logger.info("Save model {}".format(filename))
-        #self.dnn.save(filename)
+        if not os.path.exists(outputdir + "/models/"):
+            os.mkdir(outputdir + "/models/")
+        filename = outputdir + "/models/" + self.name + ".h5"
+        self.logger.info("Save model {}".format(filename))
+        self.dnn.save(filename)
 
     def loadModel(self, name):
         filename = outputdir + "/models/" + self.name + ".h5"
@@ -206,38 +254,26 @@ class Classifier(object):
         self.dnn = load_model(filename)
 
 
-    def evaluate(self, train_idxs, validate_idxs, leave_out):
+    def evaluate(self, predicted):
 
         yinput = self.data['input_1'].labels
 
-        results = list(self.name.split('.')) + [leave_out]
+        results = self.comb
 
-        for idxs, name in zip([validate_idxs, train_idxs], \
-                ['left_out', 'train']):
-            y = yinput[idxs]
 
-            rest = 1 if len(idxs)%self.batchsize > 0 else 0
+        pd.DataFrame({"true":yinput, "pred":predicted[:,0]}
+            ).to_csv("test.csv", index=False)
+        #list(self.name.split('.'))
 
-            #scores = self.dnn.predict_generator(generate_predict_data(self.data,
-            #    idxs, self.batchsize, False),
-            #    steps = len(idxs)//self.batchsize + rest)
+        auroc = metrics.roc_auc_score(yinput, predicted)
 
-            #prc = metrics.average_precision_score(y, scores)
             #acc = metrics.accuracy_score(y, scores.round())
-            #results += [acc, prc]
+        prc = metrics.average_precision_score(yinput, predicted)
+        acc = metrics.accuracy_score(yinput, predicted.round())
+        f1score = metrics.f1_score(yinput, predicted.round())
+        results += [auroc, prc, f1score, acc]
 
-            # use evaluate_generator() for loss and accuracy
-
-            losses = self.dnn.evaluate_generator(
-                generate_fit_data(self.data, idxs, self.sample_weights, self.batchsize, False),
-                steps=len(idxs) // self.batchsize + rest)
-
-            results += losses
-
-        return pd.DataFrame([results],
-                            columns=["dataset", "model", "subject_left_out"] +
-                                        ['_'.join(x) for x in itertools.product(['val', 'train'],
-                                                           self.dnn.metrics_names)])
+        return pd.DataFrame([results])
 
     def featurize(self):
         pass
@@ -255,33 +291,48 @@ if __name__ == "__main__":
             helpstr += mkey +"\t"+modeldefs[mkey][0].__doc__.format(*modeldefs[mkey][1])+"\n"
     parser.add_argument('model', choices = [ k for k in modeldefs],
             help = "Selection of Models:" + helpstr)
-    helpstr = "Datasets:\n"
-    for dkey in dataset:
-            # for now lets stick with input_1 only
-            # TODO: later make this more general
-            helpstr += dkey +"\t"+dataset[dkey].__doc__+"\n"
+
     parser.add_argument('data', choices = [ k for k in dataset],
-            help = "Selection of Datasets:" + helpstr)
+            help = "Selection of Datasets")
     parser.add_argument('--name', dest="name", default="", help = "Name-tag")
     parser.add_argument('--epochs', dest="epochs", type=int,
             default=30, help = "Number of epochs")
-    parser.add_argument('--augment', dest="augment",
-            default=False, action='store_true', help = "Use data augmentation if available")
+    parser.add_argument('--noise', dest="noise",
+            default=False, action='store_true', help = "Add Gaussian noise to the input")
+    parser.add_argument('--rotate', dest="rotate",
+            default=False, action='store_true', help = "Data augmentation by rotation")
+    parser.add_argument('--flip', dest="flip",
+            default=False, action='store_true', help = "Data augmentation by flipping the coord. signs")
+    parser.add_argument('--rofl', dest="rofl",
+            default=False, action='store_true', help = "Data augmentation by flipping and rotation")
 
     args = parser.parse_args()
-    name = '.'.join([args.data, args.model])
-    print("--augment {}".format(args.augment))
-    if args.augment:
-        name = '_'.join([name, "rot"])
+
+    comb = [args.data, args.model]
+    print("{}".format(comb))
+
+    if args.rotate:
+        comb += ["rot"]
 
     da = {}
     for k in dataset[args.data].keys():
-        da[k] = dataset[args.data][k]()
+        da[k] = get_dataset(dataset[args.data][k])
+        if args.noise:
+            comb += ["noise"]
+            da[k].transformData = da[k].transformDataNoise
+        if args.rotate:
+            comb += ["rotate"]
+            da[k].transformData = da[k].transformDataRotate
+        if args.flip:
+            comb += ["flip"]
+            da[k].transformData = da[k].transformDataFlipSign
+        if args.rofl:
+            comb += ["rofl"]
+            da[k].transformData = da[k].transformDataFlipRotate
 
     model = Classifier(da,
-            modeldefs[args.model], name=name,
+            modeldefs[args.model], comb=comb,
                         epochs = args.epochs)
 
-    model.fit(args.augment)
+    model.fit(args.noise|args.rotate|args.flip|args.rofl)
     model.saveModel()
-    model.evaluate()

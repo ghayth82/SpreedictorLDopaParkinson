@@ -55,6 +55,7 @@ for comb in all_combinations:
     #name = '.'.join([args.data, args.model])
 
     print("Running {}-{}".format(comb[0],comb[1]))
+
     name = '.'.join(comb)
     #continue
 
@@ -72,12 +73,11 @@ for comb in all_combinations:
             da[k].transformData = da[k].transformDataFlipRotate
 
 
-    model = Classifier(da, modeldefs[comb[1]], name=name, epochs = args.epochs)
+    model = Classifier(da, modeldefs[comb[1]], comb=list(comb), epochs = args.epochs)
 
     if model.summaryExists() and not args.overwrite:
         print "{} exists, skipping".format(os.path.basename(model.summary_file))
     else:
         model.fit(args.noise|args.rotate|args.flip|args.rofl)
 
-        #TODO: not yet implemented (save all LOOC models? or which ones? train model with all subjects?)
-        #model.saveModel()
+        model.saveModel()
