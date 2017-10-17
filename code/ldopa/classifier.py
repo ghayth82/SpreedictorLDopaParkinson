@@ -1,6 +1,6 @@
 from datamanagement.datasets import dataset, get_dataset
 #from datamanagement.utils import batchRandomRotation
-from datamanagement.utils import batchRandomRotation
+
 from modeldefs import modeldefs
 import logging
 import itertools
@@ -210,6 +210,7 @@ class Classifier(object):
 
         self.logger.info("Finished training ...")
 
+        print(predictions.shape)
         perf = self.evaluate(predictions)
 
         perf.to_csv(self.summary_file, header=False, index=False, sep="\t")
@@ -220,6 +221,9 @@ class Classifier(object):
         train_idxs = np.arange(len(patient_id))
         self.dnn = self.defineModel()
 
+        print("len(data): {}, data.shape: {}".format(len(self.data['input_1']),
+            self.data['input_1'].shape))
+        print("idx: {}".format(train_idxs))
         history = self.dnn.fit_generator(
             generate_fit_data(self.data, train_idxs, self.sample_weights, bs,
                     augment),
@@ -227,12 +231,16 @@ class Classifier(object):
                 (1 if len(train_idxs)%bs > 0 else 0),
             epochs = self.epochs, use_multiprocessing = True)
 
+        print("steps: {}".format((1 if len(train_idxs)//self.batchsize > 0 else 0)))
+        print("train_idxs.shape: {}".format(train_idxs.shape))
+        print("len(train_idxs)={}".format(len(train_idxs)))
         predictions = tmpmodel.predict_generator(
             generate_predict_data(self.data,
             train_idxs, self.batchsize, False),
             steps = len(train_idxs)//self.batchsize +\
              (1 if len(train_idxs)//self.batchsize > 0 else 0))
 
+        print(predictions.shape)
         perf = self.evaluate(predictions)
 
         with open(self.summary_file, "a") as f:
@@ -260,6 +268,8 @@ class Classifier(object):
 
         results = self.comb
 
+        print("yinput.shape={}".format(yinput.shape))
+        print("pred.shape={}".format(predicted.shape))
 
         pd.DataFrame({"true":yinput, "pred":predicted[:,0]}
             ).to_csv("test.csv", index=False)
@@ -273,7 +283,10 @@ class Classifier(object):
         f1score = metrics.f1_score(yinput, predicted.round())
         results += [auroc, prc, f1score, acc]
 
+        print(results)
         return pd.DataFrame([results])
+#                columns=["dataset", "model"] +
+#                    ['auROC', 'auPRC', 'F1', 'Accuracy'])
 
     def featurize(self):
         pass
