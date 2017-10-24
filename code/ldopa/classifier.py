@@ -170,6 +170,8 @@ class Classifier(object):
         predictions = np.zeros((len(patient_id),
                 self.n_outputs[self.outcome_score]),dtype="float32")
 
+        checker = np.zeros((len(patient_id)), dtype="bool")
+
         ## Perform one-hold-out cross-validation
         for i_lo, leave_out in enumerate(individuals):
             # reinit model in every loop
@@ -181,10 +183,15 @@ class Classifier(object):
 
             tmpmodel = self.defineModel()
 
-            train_individuals = np.setdiff1d(individuals, [leave_out])
+            train_idxs = np.where(patient_id != leave_out)[0]
+            validate_idxs = np.where(patient_id == leave_out)[0]
+            self.logger.info(validate_idxs)
 
-            train_idxs = np.where(np.in1d(patient_id, train_individuals))
-            validate_idxs = np.where(np.in1d(patient_id, leave_out))
+            checker[validate_idxs] = ~checker[validate_idxs]
+            #train_individuals = np.setdiff1d(individuals, [leave_out])
+
+            #train_idxs = np.where(np.in1d(patient_id, train_individuals))[0]
+            #validate_idxs = np.where(np.in1d(patient_id, leave_out))[0]
 
             history = tmpmodel.fit_generator(
                 generate_fit_data(self.data, train_idxs, self.sample_weights, bs,
@@ -206,11 +213,14 @@ class Classifier(object):
                 validate_idxs, self.batchsize, False),
                 steps = len(validate_idxs)//self.batchsize + rest)
 
+
+            del tmpmodel
+
             #perf = perf.append(self.evaluate(train_idxs, validate_idxs, leave_out))
 
         self.logger.info("Finished training ...")
+        assert np.all(checker), "not all validation indices are present. WTF!"
 
-        print(predictions.shape)
         perf = self.evaluate(predictions)
 
         perf.to_csv(self.summary_file, header=False, index=False, sep="\t")
@@ -221,9 +231,7 @@ class Classifier(object):
         train_idxs = np.arange(len(patient_id))
         self.dnn = self.defineModel()
 
-        print("len(data): {}, data.shape: {}".format(len(self.data['input_1']),
-            self.data['input_1'].shape))
-        print("idx: {}".format(train_idxs))
+
         history = self.dnn.fit_generator(
             generate_fit_data(self.data, train_idxs, self.sample_weights, bs,
                     augment),
@@ -231,16 +239,14 @@ class Classifier(object):
                 (1 if len(train_idxs)%bs > 0 else 0),
             epochs = self.epochs, use_multiprocessing = True)
 
-        print("steps: {}".format((1 if len(train_idxs)//self.batchsize > 0 else 0)))
-        print("train_idxs.shape: {}".format(train_idxs.shape))
-        print("len(train_idxs)={}".format(len(train_idxs)))
-        predictions = tmpmodel.predict_generator(
+
+        predictions = self.dnn.predict_generator(
             generate_predict_data(self.data,
             train_idxs, self.batchsize, False),
             steps = len(train_idxs)//self.batchsize +\
              (1 if len(train_idxs)//self.batchsize > 0 else 0))
 
-        print(predictions.shape)
+
         perf = self.evaluate(predictions)
 
         with open(self.summary_file, "a") as f:
