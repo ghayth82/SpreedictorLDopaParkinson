@@ -274,19 +274,21 @@ class Classifier(object):
 
         results = self.comb
 
-        print("yinput.shape={}".format(yinput.shape))
-        print("pred.shape={}".format(predicted.shape))
-
         pd.DataFrame({"true":yinput, "pred":predicted[:,0]}
             ).to_csv("test.csv", index=False)
-        #list(self.name.split('.'))
 
-        auroc = metrics.roc_auc_score(yinput, predicted)
+        if len(np.unique(yinput)) > 1:
+            auroc = metrics.roc_auc_score(yinput, predicted)
+            prc = metrics.average_precision_score(yinput, predicted)
+            acc = metrics.accuracy_score(yinput, predicted.round())
+            f1score = metrics.f1_score(yinput, predicted.round())
+        else:
+            auroc = np.nan
+            prc = np.nan
+            acc = np.nan
+            f1score = np.nan
 
-            #acc = metrics.accuracy_score(y, scores.round())
-        prc = metrics.average_precision_score(yinput, predicted)
-        acc = metrics.accuracy_score(yinput, predicted.round())
-        f1score = metrics.f1_score(yinput, predicted.round())
+
         results += [auroc, prc, f1score, acc]
 
         print(results)
