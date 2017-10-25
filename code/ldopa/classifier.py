@@ -240,17 +240,17 @@ class Classifier(object):
             epochs = self.epochs, use_multiprocessing = True)
 
 
-        predictions = self.dnn.predict_generator(
-            generate_predict_data(self.data,
-            train_idxs, self.batchsize, False),
-            steps = len(train_idxs)//self.batchsize +\
-             (1 if len(train_idxs)//self.batchsize > 0 else 0))
+       # predictions = self.dnn.predict_generator(
+       #     generate_predict_data(self.data,
+       #     train_idxs, self.batchsize, False),
+       #     steps = len(train_idxs)//self.batchsize +\
+       #      (1 if len(train_idxs)//self.batchsize > 0 else 0))
 
 
-        perf = self.evaluate(predictions)
+        #perf = self.evaluate(predictions)
 
-        with open(self.summary_file, "a") as f:
-            perf.to_csv(f, header=False, index=False, sep="\t")
+        #with open(self.summary_file, "a") as f:
+        #    perf.to_csv(f, header=False, index=False, sep="\t")
 
         self.dnn.summary()
         self.dnn.summary(print_fn = self.logger.info)
