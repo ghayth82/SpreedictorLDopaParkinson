@@ -6,7 +6,7 @@ import logging
 import itertools
 import tensorflow as tf
 from keras.backend.tensorflow_backend import set_session
-from keras.callbacks import ReduceLROnPlateau
+from keras.callbacks import ReduceLROnPlateau, TensorBoard
 
 config = tf.ConfigProto()
 config.gpu_options.per_process_gpu_memory_fraction = 0.3
@@ -22,6 +22,8 @@ import numpy as np
 import os
 from sklearn import metrics
 import sys
+
+from scoring.predictionprobability import pk
 
 
 def log_choose(n, k):
@@ -231,13 +233,18 @@ class Classifier(object):
         train_idxs = np.arange(len(patient_id))
         self.dnn = self.defineModel()
 
+        tb_cbl = TensorBoard(log_dir='./logs/{}/'.format(os.path.splitext(os.path.basename(self.summary_file))[0]),
+                             histogram_freq=0, batch_size=32, write_graph=False,
+                             write_grads=False, write_images=False, embeddings_freq=0,
+                             embeddings_layer_names=None, embeddings_metadata=None)
+
 
         history = self.dnn.fit_generator(
             generate_fit_data(self.data, train_idxs, self.sample_weights, bs,
                     augment),
             steps_per_epoch = len(train_idxs)//bs + \
                 (1 if len(train_idxs)%bs > 0 else 0),
-            epochs = self.epochs, use_multiprocessing = True)
+            epochs = self.epochs, use_multiprocessing = True, callbacks = [tb_cbl])
 
 
        # predictions = self.dnn.predict_generator(
@@ -274,22 +281,34 @@ class Classifier(object):
 
         results = self.comb
 
-        pd.DataFrame({"true":yinput, "pred":predicted[:,0]}
-            ).to_csv("test.csv", index=False)
+        #pd.DataFrame({"true":yinput, "pred":predicted[:,0]}
+        #    ).to_csv("test.csv", index=False)
 
-        if len(np.unique(yinput)) > 1:
+        if yinput.shape[1] > 1:
+            # tremor
+            class_true = np.where(yinput)[1]
+            class_predicted = np.argmax(predicted, axis=1)
+            pkscore = pk(class_true, class_predicted)
+
+            results += [pkscore]
+
+        elif len(np.unique(yinput)) > 1:
             auroc = metrics.roc_auc_score(yinput, predicted)
             prc = metrics.average_precision_score(yinput, predicted)
             acc = metrics.accuracy_score(yinput, predicted.round())
             f1score = metrics.f1_score(yinput, predicted.round())
+
+            results += [auroc, prc, f1score, acc]
         else:
             auroc = np.nan
             prc = np.nan
             acc = np.nan
             f1score = np.nan
 
+            results += [auroc, prc, f1score, acc]
 
-        results += [auroc, prc, f1score, acc]
+
+
 
         print(results)
         return pd.DataFrame([results])
