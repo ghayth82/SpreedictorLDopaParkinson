@@ -1,6 +1,7 @@
 from datamanagement.rawdata import RawData
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import roc_auc_score, accuracy_score
+from scoring.predictionprobability import pk
 import numpy as np
 
 sub ="bra"
@@ -13,8 +14,9 @@ y = rd.labels
 cl = LogisticRegression()
 
 cl.fit(X,y)
-score = cl.predict(X)
+score = cl.decision_function(X)
 print("LogReg -{}- AUC={}".format(sub, roc_auc_score(y, score)))
+score = cl.predict(X)
 print("LogReg -{}- acc={}".format(sub, accuracy_score(y, score)))
 
 print('#'*85)
@@ -28,8 +30,9 @@ y = rd.labels
 cl = LogisticRegression()
 
 cl.fit(X,y)
-score = cl.predict(X)
+score = cl.decision_function(X)
 print("LogReg -{}- AUC={}".format(sub, roc_auc_score(y, score)))
+score = cl.predict(X)
 print("LogReg -{}- acc={}".format(sub, accuracy_score(y, score)))
 
 ####################################
@@ -48,4 +51,6 @@ cl.fit(X,y)
 #score = cl.decision_function(X)
 score=np.argmax(cl.predict_proba(X),axis=1)
 
-print("LogReg -{}- AUC={}".format(sub, accuracy_score(y, score)))
+print("LogReg -{}- PK={}".format(sub, pk(y, score)))
+print("LogReg -{}- acc={}".format(sub, accuracy_score(y, score)))
+
