@@ -63,13 +63,22 @@ for comb in all_combinations:
     da = {}
     for k in dataset[comb[0]].keys():
         da[k] = get_dataset(dataset[comb[0]][k])
+        if k != 'input_1':
+            # quick-hack: for meta + timeseries
+            # 'input_1' would be the timeseries
+            # and 'input_2' the metadataset, which does not require transformData
+            continue
         if args.noise:
+            comb += ("noise",)
             da[k].transformData = da[k].transformDataNoise
         if args.rotate:
+            comb += ("rotate",)
             da[k].transformData = da[k].transformDataRotate
         if args.flip:
+            comb += ("flip",)
             da[k].transformData = da[k].transformDataFlipSign
         if args.rofl:
+            comb += ("rofl",)
             da[k].transformData = da[k].transformDataFlipRotate
 
 
