@@ -160,14 +160,10 @@ class Classifier(object):
     def fit(self, augment = True):
         self.logger.info("Start training ...")
 
-
-
         bs = self.batchsize
 
         patient_id = self.data['input_1'].patient
         individuals = np.unique(patient_id)
-
-        perf = pd.DataFrame()
 
         predictions = np.zeros((len(patient_id),
                 self.n_outputs[self.outcome_score]),dtype="float32")
@@ -190,10 +186,6 @@ class Classifier(object):
             self.logger.info(validate_idxs)
 
             checker[validate_idxs] = ~checker[validate_idxs]
-            #train_individuals = np.setdiff1d(individuals, [leave_out])
-
-            #train_idxs = np.where(np.in1d(patient_id, train_individuals))[0]
-            #validate_idxs = np.where(np.in1d(patient_id, leave_out))[0]
 
             history = tmpmodel.fit_generator(
                 generate_fit_data(self.data, train_idxs, self.sample_weights, bs,
@@ -219,14 +211,10 @@ class Classifier(object):
             del tmpmodel
             K.clear_session()
 
-            #perf = perf.append(self.evaluate(train_idxs, validate_idxs, leave_out))
-
         self.logger.info("Finished training ...")
         assert np.all(checker), "not all validation indices are present. WTF!"
 
-        perf = self.evaluate(predictions)
-
-        perf.to_csv(self.summary_file, header=False, index=False, sep="\t")
+        vaperf = self.evaluate(predictions)
 
         self.logger.info("Results written to {}".format(os.path.basename(self.summary_file)))
 
@@ -248,17 +236,19 @@ class Classifier(object):
             epochs = self.epochs, use_multiprocessing = True, callbacks = [tb_cbl])
 
 
-       # predictions = self.dnn.predict_generator(
-       #     generate_predict_data(self.data,
-       #     train_idxs, self.batchsize, False),
-       #     steps = len(train_idxs)//self.batchsize +\
-       #      (1 if len(train_idxs)//self.batchsize > 0 else 0))
+        predictions = self.dnn.predict_generator(
+            generate_predict_data(self.data,
+            train_idxs, self.batchsize, False),
+            steps = len(train_idxs)//self.batchsize +\
+             (1 if len(train_idxs)//self.batchsize > 0 else 0))
 
 
-        #perf = self.evaluate(predictions)
+        trperf = self.evaluate(predictions)
 
-        #with open(self.summary_file, "a") as f:
-        #    perf.to_csv(f, header=False, index=False, sep="\t")
+        perf = pd.DataFrame(data=np.concatenate((vaperf.values,
+                trperf.values[:,2:]), axis=1))
+
+        perf.to_csv(self.summary_file, header=False, index=False, sep="\t")
 
         self.dnn.summary()
         self.dnn.summary(print_fn = self.logger.info)
