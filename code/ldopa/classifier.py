@@ -217,6 +217,7 @@ class Classifier(object):
 
 
             del tmpmodel
+            K.clear_session()
 
             #perf = perf.append(self.evaluate(train_idxs, validate_idxs, leave_out))
 
