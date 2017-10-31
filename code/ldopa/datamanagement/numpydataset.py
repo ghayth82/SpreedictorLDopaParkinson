@@ -217,7 +217,7 @@ class NumpyDataset(object):
         else:
             data = self.data[idx]
 
-        if transform:
+        if hasattr(self, "transformData"):
             return self.transformData(data)
         else:
             return data
