@@ -47,3 +47,10 @@ class FilteredData(NumpyDataset):
         taps = signal.firwin(N, np.array(freqs) / float(nyq_rate), window=('kaiser', beta), pass_zero=pass_zero)
 
         return (taps, N)
+
+if __name__ == "__main__":
+    td=FilteredData("tre", "raml1", "fh", [0.5],reload_=True)
+    td=FilteredData("tre", "raml1", "fh", [0.5])
+
+    td=FilteredData("tre", "all", "fh", [0.5],reload_=True)
+    td=FilteredData("tre", "all", "fh", [0.5])
