@@ -3,6 +3,7 @@ from numpydataset import *
 from rawdata import RawData
 from filtereddata import FilteredData
 
+'''
 tremor_tasks = ['drnkg', 'fldng',
                 'ramr1', 'raml1', 'ramr2', 'raml2',
                 'orgpa',
@@ -15,6 +16,23 @@ dyskin_tasks = ['ramr1', 'raml1', 'ramr2', 'raml2',
 brakin_tasks = ['drnkg', 'fldng', 'orgpa',
                'ramr1', 'raml1', 'ramr2', 'raml2',
                'ftnl1', 'ftnr1', 'ftnl2', 'ftnr2']
+'''
+tremor_tasks = ['drnkg', 'fldng',
+                'ramr1', 'raml1',
+                'orgpa',
+                'ftnl1', 'ftnr1',
+                'ntblt',
+                'ramr', 'raml', 'ftnl', 'ftnr',
+                'ram', 'ftn']
+
+dyskin_tasks = ['ramr1', 'raml1', 'ftnl1', 'ftnr1',
+                'ramr', 'raml','ftnl', 'ftnr',
+                'ram', 'ftn']
+
+brakin_tasks = ['drnkg', 'fldng', 'orgpa',
+                'ramr1', 'raml1', 'ftnl1', 'ftnr1',
+                'ramr', 'raml','ftnl', 'ftnr',
+                'ram', 'ftn']
 
 def get_dataset_names(data_transform):
     return ['-'.join(x) for x in itertools.product([data_transform], ['tre'], tremor_tasks)] \

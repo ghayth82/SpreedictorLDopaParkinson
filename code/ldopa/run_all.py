@@ -59,6 +59,22 @@ for comb in all_combinations:
     name = '.'.join(comb)
     #continue
 
+    if args.noise:
+        name = '_'.join([name, "aug"])
+    print(name)
+    print("--rotate {}".format(args.rotate))
+    if args.rotate:
+        name = '_'.join([name, "rot"])
+    print(name)
+    print("--flip {}".format(args.flip))
+    if args.flip:
+        name = '_'.join([name, "flip"])
+    print(name)
+    print("--rofl {}".format(args.rofl))
+    if args.rofl:
+        name = '_'.join([name, "rofl"])
+    print(name)
+
 
     da = {}
     for k in dataset[comb[0]].keys():
@@ -73,7 +89,7 @@ for comb in all_combinations:
             da[k].transformData = da[k].transformDataFlipRotate
 
 
-    model = Classifier(da, modeldefs[comb[1]], comb=list(comb), epochs = args.epochs)
+    model = Classifier(da, modeldefs[comb[1]], comb=list(comb), name=name, epochs = args.epochs)
 
     if model.summaryExists() and not args.overwrite:
         print "{} exists, skipping".format(os.path.basename(model.summary_file))

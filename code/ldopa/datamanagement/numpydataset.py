@@ -7,6 +7,7 @@ import progressbar
 from keras.utils.np_utils import to_categorical
 import pandas as pd
 from .utils import batchRandomRotation
+import itertools
 
 
 datadir = os.getenv('PARKINSON_DREAM_LDOPA_DATA')
@@ -33,12 +34,22 @@ class NumpyDataset(object):
 
             outcome_var = outcome_vars[self.outcome]
 
-            cdtask = ld.commondescr[(ld.commondescr["task"] == self.task) & \
-                    ~(ld.commondescr[outcome_var].isnull())]
+            if self.task in ['ramr', 'raml', 'ftnl', 'ftnr']:
+                task_names = [''.join(x) for x in itertools.product([self.task], ['1', '2'])]
+            elif self.task in ['ram', 'ftn']:
+                task_names = [''.join(x) for x in itertools.product([self.task], ['l', 'r'], ['1', '2'])]
+            else:
+                task_names = [self.task]
+
+            cdtask = ld.commondescr[(ld.commondescr["task"].isin(task_names)) &
+                                    ~(ld.commondescr[outcome_var].isnull())]
+
             nrows = cdtask.shape[0]
 
-            if self.task in ['ftnl1', 'ftnl2', 'ftnr1', 'ftnr2',\
-                'ramr1','ramr2','raml1','raml2']:
+            if self.task in ['ftnl1', 'ftnl2', 'ftnr1', 'ftnr2',
+                'ramr1','ramr2','raml1','raml2',
+                'ramr', 'raml', 'ftnl', 'ftnr',
+                'ram', 'ftn']:
                 ndatapoints = 1000
             else:
                 ndatapoints = 2000
@@ -105,7 +116,16 @@ class NumpyDataset(object):
     def patient(self):
         ld = LDopa()
         outcome_var = outcome_vars[self.outcome]
-        cdtask = ld.commondescr[(ld.commondescr["task"] == self.task) & ~(ld.commondescr[outcome_var].isnull())]
+
+        if self.task in ['ramr', 'raml', 'ftnl', 'ftnr']:
+            task_names = [''.join(x) for x in itertools.product([self.task], ['1', '2'])]
+        elif self.task in ['ram', 'ftn']:
+            task_names = [''.join(x) for x in itertools.product([self.task], ['l', 'r'], ['1', '2'])]
+        else:
+            task_names = [self.task]
+
+        cdtask = ld.commondescr[(ld.commondescr["task"].isin(task_names))
+                                    & ~(ld.commondescr[outcome_var].isnull())]
 
         annotation = cdtask.iloc[self.keepind]
 
