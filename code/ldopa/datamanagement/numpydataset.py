@@ -7,23 +7,29 @@ import progressbar
 from keras.utils.np_utils import to_categorical
 import pandas as pd
 from .utils import batchRandomRotation
+import itertools
 
 
 datadir = os.getenv('PARKINSON_DREAM_LDOPA_DATA')
 outcome_vars = {'tre': 'tremorScore', 'dys' : 'dyskinesiaScore', 'bra' : 'bradykinesiaScore'}
 
-tremor_tasks = ['drnkg', 'fldng',
-                'ramr1', 'raml1', 'ramr2', 'raml2',
-                'orgpa',
-                'ftnl1', 'ftnr1', 'ftnl2', 'ftnr2',
-                'ntblt']
 
-dyskin_tasks = ['ramr1', 'raml1', 'ramr2', 'raml2',
-                'ftnl1', 'ftnr1', 'ftnl2', 'ftnr2']
+tremor_tasks = ['drnkg', 'fldng',
+                'ramr1', 'raml1',
+                'orgpa',
+                'ftnl1', 'ftnr1',
+                'ntblt',
+                'ramr', 'raml', 'ftnl', 'ftnr',
+                'ram', 'ftn']
+
+dyskin_tasks = ['ramr1', 'raml1', 'ftnl1', 'ftnr1',
+                'ramr', 'raml','ftnl', 'ftnr',
+                'ram', 'ftn']
 
 brakin_tasks = ['drnkg', 'fldng', 'orgpa',
-               'ramr1', 'raml1', 'ramr2', 'raml2',
-               'ftnl1', 'ftnr1', 'ftnl2', 'ftnr2']
+                'ramr1', 'raml1', 'ftnl1', 'ftnr1',
+                'ramr', 'raml','ftnl', 'ftnr',
+                'ram', 'ftn']
 
 subch_tasklist = {'tre': tremor_tasks, 'dys': dyskin_tasks, 'bra': brakin_tasks }
 
@@ -100,12 +106,22 @@ class NumpyDataset(object):
 
             outcome_var = outcome_vars[self.outcome]
 
-            cdtask = ld.commondescr[(ld.commondescr["task"] == self.task) & \
-                    ~(ld.commondescr[outcome_var].isnull())]
+            if self.task in ['ramr', 'raml', 'ftnl', 'ftnr']:
+                task_names = [''.join(x) for x in itertools.product([self.task], ['1', '2'])]
+            elif self.task in ['ram', 'ftn']:
+                task_names = [''.join(x) for x in itertools.product([self.task], ['l', 'r'], ['1', '2'])]
+            else:
+                task_names = [self.task]
+
+            cdtask = ld.commondescr[(ld.commondescr["task"].isin(task_names)) &
+                                    ~(ld.commondescr[outcome_var].isnull())]
+
             nrows = cdtask.shape[0]
 
-            if self.task in ['ftnl1', 'ftnl2', 'ftnr1', 'ftnr2',\
-                'ramr1','ramr2','raml1','raml2']:
+            if self.task in ['ftnl1', 'ftnl2', 'ftnr1', 'ftnr2',
+                'ramr1','ramr2','raml1','raml2',
+                'ramr', 'raml', 'ftnl', 'ftnr',
+                'ram', 'ftn']:
                 ndatapoints = 1000
             else:
                 ndatapoints = 2000

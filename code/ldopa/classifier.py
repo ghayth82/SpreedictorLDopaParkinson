@@ -118,7 +118,7 @@ class Classifier(object):
     # AUC for 'bra' and 'dys' and perhaps prediction probability (PR) for 'tre'
 
 
-    def __init__(self, datadict, model_definition, comb, epochs,
+    def __init__(self, datadict, model_definition, comb, name, epochs,
         logs = "model.log", overwrite = False):
         '''
         :input: is a class that contains the input for the prediction
@@ -134,7 +134,7 @@ class Classifier(object):
             format = '%(asctime)s:%(name)s:%(message)s',
             datefmt = '%m/%d/%Y %I:%M:%S')
 
-        self.name = '.'.join(comb)
+        self.name = name
         self.comb = comb
         self.logger = logging.getLogger(self.name)
 
@@ -254,7 +254,10 @@ class Classifier(object):
         train_idxs = np.arange(len(patient_id))
         self.dnn = self.defineModel()
 
-        tb_cbl = TensorBoard(log_dir='./logs/{}/'.format(os.path.splitext(os.path.basename(self.summary_file))[0]),
+        tensorboard_logdir = os.path.join(outputdir, "logs", "tensorboard",
+                                          (os.path.splitext(os.path.basename(self.summary_file))[0]))
+
+        tb_cbl = TensorBoard(log_dir=tensorboard_logdir,
                              histogram_freq=0, batch_size=32, write_graph=False,
                              write_grads=False, write_images=False, embeddings_freq=0,
                              embeddings_layer_names=None, embeddings_metadata=None)
@@ -309,7 +312,8 @@ class Classifier(object):
             results += [self.comb[0], '.'.join(self.comb[1:])]
 
         if len(np.unique(yinput)) == 2:
-            # this is to be checked for the binary prediction
+            # WK: not sure if np.isnan is required. I never experienced issues with that
+            #elif len(np.unique(yinput)) > 1 and not np.any(np.isnan(predicted)):
             auroc = metrics.roc_auc_score(yinput, predicted)
             prc = metrics.average_precision_score(yinput, predicted)
             acc = metrics.accuracy_score(yinput, predicted.round())
