@@ -21,23 +21,37 @@ import pandas as pd
 import numpy as np
 import os
 from sklearn import metrics
+from scipy.stats import binom
 import sys
 
 from scoring.predictionprobability import pk
 
 
+def log_choose_4(k):
+    if k == 0:
+        return 1
+    elif k == 1:
+        return 4
+    elif k == 2:
+        return 6
+    elif k == 3:
+        return 4
+    else:
+        return 1
+
 def log_choose(n, k):
     x = K.epsilon()
-    for i in range(n):
-        x += K.log(i)
-    for i in range(k):
-        x -= K.log(i)
-    for i in range(n-k):
-        x -= K.log(i)
+    for i in K.arange(n):
+        x += K.log(K.cast_to_floatx(i))
+    for i in K.arange(k):
+        x -= K.log(K.cast_to_floatx(i))
+    for i in K.arange(n-k):
+        x -= K.log(K.cast_to_floatx(i))
     return x
 
 def binomial_loss(y_true, y_pred):
-    return K.mean(-log_choose(4, y_true) - y_true*K.log(y_pred) - (4-y_true)*K.log(1-y_pred))
+    return K.mean(-log_choose_4(y_true) - y_true*K.log(y_pred) - (4-y_true)*K.log(1-y_pred))
+
 
 
 outputdir = os.getenv('PARKINSON_DREAM_LDOPA_DATA')
@@ -53,8 +67,24 @@ def generate_fit_data(dataset, indices, sample_weights, batchsize, augment = Tru
                 Xinput[ipname] = dataset[ipname].getData(
                     indices[ib*batchsize:(ib+1)*batchsize], augment).copy()
 
+            if len(dataset.keys()) == 2 and False:
+                # special case for meta + timeseries
+                # here, either meta or timeseries might be dropped out
+                val=np.random.binomial(1, 0.5, 2)
+                if np.sum(val) == 0 or np.sum(val) == 2:
+                    #keep both dataset
+                    continue
+                elif val[0] == 1:
+                    # set timeseries to zeros
+                    Xinput['input_1'] = np.zeros(Xinput['input_1'].shape, dtype="float32")
+                else:
+                    # set metadata to zeros
+                    Xinput['input_2'] = np.zeros(Xinput['input_2'].shape, dtype="float32")
+
             yinput = dataset['input_1'].labels[
                     indices[ib*batchsize:(ib+1)*batchsize]].copy()
+
+            #yinput = yinput.astype("float32")
 
             sw = sample_weights[indices[ib*batchsize:(ib+1)*batchsize]].copy()
 
@@ -80,10 +110,10 @@ def generate_predict_data(dataset, indices, batchsize, augment = True):
             yield Xinput
 
 class Classifier(object):
-    n_outputs = {'bra':1, 'dys':1, 'tre':5}
-    act_fct = {'bra':'sigmoid', 'dys':'sigmoid', 'tre':'softmax'}
+    n_outputs = {'bra':1, 'dys':1, 'tre':1}
+    act_fct = {'bra':'sigmoid', 'dys':'sigmoid', 'tre': 'sigmoid'}
     loss_fct = {'bra':'binary_crossentropy', 'dys': 'binary_crossentropy',
-            'tre': 'categorical_crossentropy'}
+            'tre': binomial_loss}
     # todo evaluation method also depends on task.
     # AUC for 'bra' and 'dys' and perhaps prediction probability (PR) for 'tre'
 
@@ -119,6 +149,7 @@ class Classifier(object):
         hcvc = hcdf['patientId'].value_counts()
         hcdf["nsamples"] = hcdf['patientId'].map(lambda r: hcvc[r])
         self.sample_weights = 1. / hcdf["nsamples"].values
+        self.sample_weights = np.ones((len(datadict['input_1']), ), dtype="float32")
 
 
         self.logger.info("Input dimensions:")
@@ -150,6 +181,7 @@ class Classifier(object):
             name="main_output")(outputs)
 
         model = Model(inputs = inputs, outputs = outputs)
+
         model.compile(loss=self.loss_fct[self.outcome_score],
                     optimizer='adadelta',
                     metrics=['accuracy'])
@@ -270,27 +302,36 @@ class Classifier(object):
 
         yinput = self.data['input_1'].labels
 
-        results = self.comb
+        results = []
+        if len(self.comb) == 2:
+            results += self.comb
+        else:
+            results += [self.comb[0], '.'.join(self.comb[1:])]
 
-        #pd.DataFrame({"true":yinput, "pred":predicted[:,0]}
-        #    ).to_csv("test.csv", index=False)
-
-        if yinput.shape[1] > 1:
-            # tremor
-            class_true = np.where(yinput)[1]
-            class_predicted = np.argmax(predicted, axis=1)
-            pkscore = pk(class_true, class_predicted)
-
-            results += [pkscore]
-
-        elif len(np.unique(yinput)) > 1:
+        if len(np.unique(yinput)) == 2:
+            # this is to be checked for the binary prediction
             auroc = metrics.roc_auc_score(yinput, predicted)
             prc = metrics.average_precision_score(yinput, predicted)
             acc = metrics.accuracy_score(yinput, predicted.round())
             f1score = metrics.f1_score(yinput, predicted.round())
 
             results += [auroc, prc, f1score, acc]
+
+        elif len(np.unique(yinput)) > 2:
+            # this is used for tremorScore where values from 0 to 4 are possible
+            class_true = yinput
+            class_predicted = np.argmax(binom.pmf(np.arange(4), 4, predicted))
+            class_predicted = np.array([ np.argmax(binom.pmf(np.arange(4), \
+                    4, p)) for p in predicted])
+            #class_predicted = np.argmax(predicted, axis=1)
+            pkscore = pk(class_true, class_predicted)
+            acc = metrics.accuracy_score(class_true, class_predicted)
+
+            results += [pkscore, acc]
+
         else:
+            # this is checked if only one class is left
+            # then we cannot score
             auroc = np.nan
             prc = np.nan
             acc = np.nan
@@ -298,13 +339,7 @@ class Classifier(object):
 
             results += [auroc, prc, f1score, acc]
 
-
-
-
-        print(results)
         return pd.DataFrame([results])
-#                columns=["dataset", "model"] +
-#                    ['auROC', 'auPRC', 'F1', 'Accuracy'])
 
     def featurize(self):
         pass
