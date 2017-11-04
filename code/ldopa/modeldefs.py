@@ -1,4 +1,4 @@
-from keras.layers import Input, Dense, Dropout
+from keras.layers import Input, Dense, Dropout, Concatenate
 from keras.layers.recurrent import LSTM
 from keras.layers.convolutional import Conv1D
 from keras.layers.pooling import GlobalAveragePooling1D
@@ -33,6 +33,52 @@ def model_pool_conv_glob(data, paramdims):
     layer = Conv1D(paramdims[1], kernel_size=(paramdims[2]), activation = 'relu')(layer)
     output = GlobalAveragePooling1D()(layer)
     return input, output
+
+def meta_l1(data, paramdims):
+    """
+    Metadata model
+    Dense({}, {})
+    """
+    # second input
+    input = Input(shape=data['input_1'].shape, name='input_1')
+    output = Dense(paramdims[0], activation = paramdims[1])(input)
+
+    return input, output
+
+
+def metatime_conv_2l_glob(data, paramdims):
+    '''
+    Conv1D:
+        {} x {}, relu
+        {} pooling
+        {} x
+        GlobPool
+    '''
+    # first input
+    input1 = Input(shape=data['input_1'].shape, name='input_1')
+    tlayer = Conv1D(paramdims[0], kernel_size=(paramdims[1]),
+            activation = 'relu')(input1)
+
+    tlayer = BatchNormalization()(tlayer)
+
+    tlayer = MaxPooling1D(pool_size=paramdims[2])(tlayer)
+
+    tlayer = Conv1D(paramdims[3], kernel_size=(paramdims[4]),
+            activation = 'relu')(tlayer)
+    tlayer = BatchNormalization()(tlayer)
+    tlayer = GlobalAveragePooling1D()(tlayer)
+    #tlayer = Dropout(0.5)(tlayer)
+
+    # second input
+    input2 = Input(shape=data['input_2'].shape, name='input_2')
+    mlayer = Dense(paramdims[5], activation = 'relu')(input2)
+    #mlayer = Dropout(0.5)(mlayer)
+
+    # merge networks
+    layer = Concatenate()([tlayer, mlayer])
+    output = Dense(paramdims[6], activation = 'relu')(layer)
+
+    return [input1, input2], output
 
 def model_conv_2l_glob(data, paramdims):
     '''
@@ -86,6 +132,17 @@ def model_conv_3l_glob(data, paramdims):
     return input, output
 
 
+def model_logreg_meta(data, paramdims):
+    '''
+    logistig regresscion:
+        {}
+        Flatten
+    '''
+    input = Input(shape=data["input_1"].shape, name='input_1')
+    output = input
+
+    return input, output
+
 def model_logreg(data, paramdims):
     '''
     logistig regresscion:
@@ -98,23 +155,27 @@ def model_logreg(data, paramdims):
     return input, output
 
 modeldefs = {
-    'conv_30_100': (model_conv_glob, (30,100)),
+#    'conv_30_100': (model_conv_glob, (30,100)),
     'conv_30_200': (model_conv_glob, (30,200)),
-    'conv_30_300': (model_conv_glob, (30,300)),
-    'conv_10_200': (model_conv_glob, (10,200)),
-    'conv_50_200': (model_conv_glob, (50,200)),
-    'conv2l_30_300_10_20_30': (model_conv_2l_glob, (30,200,10,3,30)),
-    'conv2l_50_300_10_20_30': (model_conv_2l_glob, (50,200,10,3,30)),
-    'conv2l_50_300_10_40_30': (model_conv_2l_glob, (50,200,10,3,30)),
-    'conv2l_30_300_10_40_30': (model_conv_2l_glob, (30,200,10,3,30)),
-    'conv3l_50_300_10_20_30_10_10': (model_conv_3l_glob, (50,200,10,20,30, 10,10)),
-    'conv3l_30_300_10_20_30_10_10': (model_conv_3l_glob, (30,200,10,20,30, 10,10)),
-    'conv3l_30_300_10_40_30_10_10': (model_conv_3l_glob, (30,200,10,40,30, 10,10)),
-    'conv3l_50_300_10_40_30_10_10': (model_conv_3l_glob, (50,200,10,40,30, 10,10)),
-    'conv3l_70_300_10_20_30_10_10': (model_conv_3l_glob, (70,200,10,20,30, 10,10)),
-    'conv3l_50_300_10_20_30_10_10': (model_conv_3l_glob, (50,200,10,20,30, 10,10)),
+#    'conv_30_300': (model_conv_glob, (30,300)),
+#    'conv_10_200': (model_conv_glob, (10,200)),
+#    'conv_50_200': (model_conv_glob, (50,200)),
+#    'conv2l_30_300_10_20_30': (model_conv_2l_glob, (30,200,10,3,30)),
+#    'conv2l_50_300_10_20_30': (model_conv_2l_glob, (50,200,10,3,30)),
+    'conv2l_50_200_10_3_30': (model_conv_2l_glob, (50,200,10,3,30)),
+    'conv2l_30_200_10_3_30': (model_conv_2l_glob, (30,200,10,3,30)),
+#    'conv3l_50_300_10_20_30_10_10': (model_conv_3l_glob, (50,200,10,20,30, 10,10)),
+#    'conv3l_30_300_10_20_30_10_10': (model_conv_3l_glob, (30,200,10,20,30, 10,10)),
+#    'conv3l_30_300_10_40_30_10_10': (model_conv_3l_glob, (30,200,10,40,30, 10,10)),
+#    'conv3l_50_300_10_40_30_10_10': (model_conv_3l_glob, (50,200,10,40,30, 10,10)),
+#    'conv3l_70_300_10_20_30_10_10': (model_conv_3l_glob, (70,200,10,20,30, 10,10)),
+#    'conv3l_50_300_10_20_30_10_10': (model_conv_3l_glob, (50,200,10,20,30, 10,10)),
+    'metatime_conv_2l_glob': (metatime_conv_2l_glob, (30,200,10,50,30, 20, 10)),
+    'metatime_conv2l_70_200_10_50_30_20_10': (metatime_conv_2l_glob, (70,200,10,50,30, 20, 10)),
+    'meta_l1_relu': (meta_l1, (10, 'relu')),
+    'meta_l1_tanh': (meta_l1, (10, 'tanh')),
 #    'poolconv_10_50_20': (model_pool_conv_glob, (10,50,20)),
 #    'poolconv_10_30_20': (model_pool_conv_glob, (10,30,20)),
 #    'poolconv_10_30_30': (model_pool_conv_glob, (10,30,30)),
-#    'logreg' : (model_logreg, (0,)),
+    'logregmeta' : (model_logreg_meta, (0,)),
 }
