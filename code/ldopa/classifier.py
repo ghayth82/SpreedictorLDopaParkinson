@@ -27,31 +27,6 @@ import sys
 from scoring.predictionprobability import pk
 
 
-def log_choose_4(k):
-    if k == 0:
-        return 1
-    elif k == 1:
-        return 4
-    elif k == 2:
-        return 6
-    elif k == 3:
-        return 4
-    else:
-        return 1
-
-def log_choose(n, k):
-    x = K.epsilon()
-    for i in K.arange(n):
-        x += K.log(K.cast_to_floatx(i))
-    for i in K.arange(k):
-        x -= K.log(K.cast_to_floatx(i))
-    for i in K.arange(n-k):
-        x -= K.log(K.cast_to_floatx(i))
-    return x
-
-def binomial_loss(y_true, y_pred):
-    return K.mean(-log_choose_4(y_true) - y_true*K.log(y_pred) - (4-y_true)*K.log(1-y_pred))
-
 
 
 outputdir = os.getenv('PARKINSON_DREAM_LDOPA_DATA')
@@ -59,6 +34,7 @@ outputdir = os.getenv('PARKINSON_DREAM_LDOPA_DATA')
 def generate_fit_data(dataset, indices, sample_weights, batchsize, augment = True):
     while 1:
         ib = 0
+        np.random.shuffle(indices)
         if len(indices) == 0:
             raise Exception("index list is empty")
         while ib < (len(indices)//batchsize + (1 if len(indices)%batchsize > 0 else 0)):
@@ -70,21 +46,19 @@ def generate_fit_data(dataset, indices, sample_weights, batchsize, augment = Tru
             if len(dataset.keys()) == 2 and False:
                 # special case for meta + timeseries
                 # here, either meta or timeseries might be dropped out
-                val=np.random.binomial(1, 0.5, 2)
-                if np.sum(val) == 0 or np.sum(val) == 2:
-                    #keep both dataset
-                    continue
-                elif val[0] == 1:
-                    # set timeseries to zeros
-                    Xinput['input_1'] = np.zeros(Xinput['input_1'].shape, dtype="float32")
-                else:
-                    # set metadata to zeros
-                    Xinput['input_2'] = np.zeros(Xinput['input_2'].shape, dtype="float32")
+                for i in range(Xinput[ipname].shape[0]):
+                    c = np.random.choice(np.arange(3))
+                    if c == 0:
+                        Xinput['input_1'] = np.zeros(Xinput['input_1'].shape, dtype="float32")
+                    elif c == 1:
+                        Xinput['input_2'] = np.zeros(Xinput['input_2'].shape, dtype="float32")
+                    else:
+                        #keep both
+                        pass
+
 
             yinput = dataset['input_1'].labels[
                     indices[ib*batchsize:(ib+1)*batchsize]].copy()
-
-            #yinput = yinput.astype("float32")
 
             sw = sample_weights[indices[ib*batchsize:(ib+1)*batchsize]].copy()
 
@@ -110,10 +84,10 @@ def generate_predict_data(dataset, indices, batchsize, augment = True):
             yield Xinput
 
 class Classifier(object):
-    n_outputs = {'bra':1, 'dys':1, 'tre':1}
-    act_fct = {'bra':'sigmoid', 'dys':'sigmoid', 'tre': 'sigmoid'}
+    n_outputs = {'bra':1, 'dys':1, 'tre':5}
+    act_fct = {'bra':'sigmoid', 'dys':'sigmoid', 'tre': 'softmax'}
     loss_fct = {'bra':'binary_crossentropy', 'dys': 'binary_crossentropy',
-            'tre': binomial_loss}
+            'tre': 'categorical_crossentropy'}
     # todo evaluation method also depends on task.
     # AUC for 'bra' and 'dys' and perhaps prediction probability (PR) for 'tre'
 
@@ -142,13 +116,13 @@ class Classifier(object):
         self.data = datadict
         self.batchsize = 100
 
-        patient_id = datadict['input_1'].patient
+        #patient_id = datadict['input_1'].patient
 
         # determine sample weights
-        hcdf = pd.DataFrame(patient_id, columns=["patientId"])
-        hcvc = hcdf['patientId'].value_counts()
-        hcdf["nsamples"] = hcdf['patientId'].map(lambda r: hcvc[r])
-        self.sample_weights = 1. / hcdf["nsamples"].values
+        #hcdf = pd.DataFrame(patient_id, columns=["patientId"])
+        #hcvc = hcdf['patientId'].value_counts()
+        #hcdf["nsamples"] = hcdf['patientId'].map(lambda r: hcvc[r])
+        #self.sample_weights = 1. / hcdf["nsamples"].values
         self.sample_weights = np.ones((len(datadict['input_1']), ), dtype="float32")
 
 
@@ -175,6 +149,8 @@ class Classifier(object):
     def defineModel(self):
 
         inputs, outputs = self.modelfct(self.data, self.modelparams)
+
+        self.feature_predictor = Model(inputs = inputs, outputs = outputs)
 
         outputs = Dense(self.n_outputs[self.outcome_score],
             activation=self.act_fct[self.outcome_score],
@@ -224,7 +200,7 @@ class Classifier(object):
                         augment),
                 steps_per_epoch = len(train_idxs)//bs + \
                     (1 if len(train_idxs)%bs > 0 else 0),
-                epochs = self.epochs,
+                epochs = self.epochs//2,
                 use_multiprocessing = True)
 
             self.logger.info("Performance after leaving out {} ({} epochs) loss {:1.3f}, acc {:1.3f}".format(
@@ -295,7 +271,7 @@ class Classifier(object):
         self.logger.info("Save model {}".format(filename))
         self.dnn.save(filename)
 
-    def loadModel(self, name):
+    def loadModel(self):
         filename = outputdir + "/models/" + self.name + ".h5"
         self.logger.info("Load model {}".format(filename))
         self.dnn = load_model(filename)
@@ -311,7 +287,7 @@ class Classifier(object):
         else:
             results += [self.comb[0], '.'.join(self.comb[1:])]
 
-        if len(np.unique(yinput)) == 2:
+        if len(np.unique(yinput)) == 2 and len(yinput.shape) == 1:
             # WK: not sure if np.isnan is required. I never experienced issues with that
             #elif len(np.unique(yinput)) > 1 and not np.any(np.isnan(predicted)):
             auroc = metrics.roc_auc_score(yinput, predicted)
@@ -321,12 +297,15 @@ class Classifier(object):
 
             results += [auroc, prc, f1score, acc]
 
-        elif len(np.unique(yinput)) > 2:
+        elif len(yinput.shape) > 1:
             # this is used for tremorScore where values from 0 to 4 are possible
-            class_true = yinput
-            class_predicted = np.argmax(binom.pmf(np.arange(4), 4, predicted))
-            class_predicted = np.array([ np.argmax(binom.pmf(np.arange(4), \
-                    4, p)) for p in predicted])
+            class_true = np.where(yinput)[1]
+            class_predicted = np.argmax(predicted, axis=1)
+
+#            class_true = yinput
+#            class_predicted = np.argmax(binom.pmf(np.arange(4), 4, predicted))
+#            class_predicted = np.array([ np.argmax(binom.pmf(np.arange(4), \
+#                    4, p)) for p in predicted])
             #class_predicted = np.argmax(predicted, axis=1)
             pkscore = pk(class_true, class_predicted)
             acc = metrics.accuracy_score(class_true, class_predicted)
@@ -345,8 +324,18 @@ class Classifier(object):
 
         return pd.DataFrame([results])
 
-    def featurize(self):
-        pass
+    def featurize(self, X):
+
+        self.defineModel()
+#        for idxs in range(len(self.data)):
+        #idxs = np.arange(len(self.data['input_1']))
+        #rest = 1 if len(idxs)%self.batchsize > 0 else 0
+
+        #print("idxs ={}, steps = {}".format(idxs, len(idxs)//self.batchsize + rest))
+
+        scores = self.feature_predictor.predict(X)
+        return scores
+
 
 if __name__ == "__main__":
 
@@ -375,6 +364,8 @@ if __name__ == "__main__":
             default=False, action='store_true', help = "Data augmentation by flipping the coord. signs")
     parser.add_argument('--rofl', dest="rofl",
             default=False, action='store_true', help = "Data augmentation by flipping and rotation")
+    parser.add_argument('--allaug', dest="allaug",
+            default=False, action='store_true', help = "Data augmentation with all options")
 
     args = parser.parse_args()
 
@@ -399,9 +390,15 @@ if __name__ == "__main__":
         if args.rofl:
             comb += ["rofl"]
             da[k].transformData = da[k].transformDataFlipRotate
+        if args.allaug:
+            comb += ["allaug"]
+            da[k].transformData = da[k].transformDataAll
+
+    name = '.'.join(comb)
 
     model = Classifier(da,
             modeldefs[args.model], comb=comb,
+                        name=name,
                         epochs = args.epochs)
 
     model.fit(args.noise|args.rotate|args.flip|args.rofl)
