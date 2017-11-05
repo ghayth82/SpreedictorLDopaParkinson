@@ -108,66 +108,66 @@ def deep_conv(data, paramdims):
     # first input
     input1 = Input(shape=data['input_1'].shape, name='input_1')
     #1
-    tlayer = Conv1D(8, kernel_size=(3),
+    tlayer = Conv1D(paramdims[0], kernel_size=(paramdims[1]),
             activation = 'relu')(input1)
 
     tlayer = BatchNormalization()(tlayer)
 
-    tlayer = MaxPooling1D(pool_size=2)(tlayer)
+    tlayer = MaxPooling1D(pool_size=paramdims[2])(tlayer)
 
     #l2
-    tlayer = Conv1D(16, kernel_size=(4),
+    tlayer = Conv1D(paramdims[3], kernel_size=(paramdims[4]),
             activation = 'relu')(tlayer)
     tlayer = BatchNormalization()(tlayer)
-    tlayer = MaxPooling1D(pool_size=2)(tlayer)
+    tlayer = MaxPooling1D(pool_size=paramdims[5])(tlayer)
 
     #l3
-    tlayer = Conv1D(32, kernel_size=(3),
+    tlayer = Conv1D(paramdims[6], kernel_size=(paramdims[7]),
             activation = 'relu')(tlayer)
 
     tlayer = BatchNormalization()(tlayer)
 
-    tlayer = MaxPooling1D(pool_size=2)(tlayer)
+    tlayer = MaxPooling1D(pool_size=paramdims[8])(tlayer)
 
     #l4
-    tlayer = Conv1D(32, kernel_size=(3),
+    tlayer = Conv1D(paramdims[9], kernel_size=(paramdims[10]),
             activation = 'relu')(tlayer)
 
     tlayer = BatchNormalization()(tlayer)
 
-    tlayer = MaxPooling1D(pool_size=2)(tlayer)
+    tlayer = MaxPooling1D(pool_size=paramdims[11])(tlayer)
 
     #l5
-    tlayer = Conv1D(64, kernel_size=(3),
+    tlayer = Conv1D(paramdims[12], kernel_size=(paramdims[13]),
             activation = 'relu')(tlayer)
 
     tlayer = BatchNormalization()(tlayer)
 
-    tlayer = MaxPooling1D(pool_size=2)(tlayer)
+    tlayer = MaxPooling1D(pool_size=paramdims[14])(tlayer)
 
     #l6
-    tlayer = Conv1D(64, kernel_size=(4),
+    tlayer = Conv1D(paramdims[15], kernel_size=(paramdims[16]),
             activation = 'relu')(tlayer)
 
     tlayer = BatchNormalization()(tlayer)
 
-    tlayer = MaxPooling1D(pool_size=2)(tlayer)
+    tlayer = MaxPooling1D(pool_size=paramdims[17])(tlayer)
 
     #l7
-    tlayer = Conv1D(128, kernel_size=(3),
+    tlayer = Conv1D(paramdims[18], kernel_size=(paramdims[19]),
             activation = 'relu')(tlayer)
 
     tlayer = BatchNormalization()(tlayer)
 
-    tlayer = MaxPooling1D(pool_size=2)(tlayer)
+    tlayer = MaxPooling1D(pool_size=paramdims[20])(tlayer)
 
     #l7
-    tlayer = Conv1D(128, kernel_size=(4),
+    tlayer = Conv1D(paramdims[21], kernel_size=(paramdims[22]),
             activation = 'relu')(tlayer)
 
     tlayer = BatchNormalization()(tlayer)
 
-    tlayer = MaxPooling1D(pool_size=2)(tlayer)
+    tlayer = MaxPooling1D(pool_size=paramdims[23])(tlayer)
 
 
     tlayer = GlobalAveragePooling1D()(tlayer)
@@ -175,12 +175,12 @@ def deep_conv(data, paramdims):
 
     # second input
     input2 = Input(shape=data['input_2'].shape, name='input_2')
-    mlayer = Dense(10, activation = 'relu')(input2)
+    mlayer = Dense(paramdims[24], activation = 'relu')(input2)
     #mlayer = Dropout(0.5)(mlayer)
 
     # merge networks
     layer = Concatenate()([tlayer, mlayer])
-    output = Dense(20, activation = 'relu')(layer)
+    output = Dense(paramdims[25], activation = 'relu')(layer)
 
     return [input1, input2], output
 
@@ -251,11 +251,28 @@ modeldefs = {
 #    'conv3l_50_300_10_40_30_10_10': (model_conv_3l_glob, (50,200,10,40,30, 10,10)),
 #    'conv3l_70_300_10_20_30_10_10': (model_conv_3l_glob, (70,200,10,20,30, 10,10)),
 #    'conv3l_50_300_10_20_30_10_10': (model_conv_3l_glob, (50,200,10,20,30, 10,10)),
-    'metatime_conv_2l_glob': (metatime_conv_2l_glob, (30,200,10,50,30, 20, 10)),
+#    'metatime_conv_2l_glob': (metatime_conv_2l_glob, (30,200,10,50,30, 20, 10)),
     'metatime_conv2l_70_200_10_50_30_20_10': (metatime_conv_2l_glob, (70,200,10,50,30, 20, 10)),
     'meta_l1_relu': (meta_l1, (10, 'relu')),
     'meta_l1_tanh': (meta_l1, (10, 'tanh')),
-    'metatime_deep_conv': (deep_conv, ()),
+    'metatime_deep_conv': (deep_conv, (8, 3, 2,
+                                        16, 4, 2,
+                                        32, 3, 2,
+                                        32, 3, 2,
+                                        64, 3, 2,
+                                        64, 4, 2,
+                                        128, 3, 2,
+                                        128, 4, 2,
+                                        10, 20)),
+ #   'metatime_deep_conv_v2': (deep_conv, (16, 6, 2,
+ #                                       16, 4, 2,
+ #                                       32, 3, 2,
+ #                                       32, 3, 2,
+ #                                       64, 3, 2,
+ #                                       64, 4, 2,
+ #                                       128, 3, 2,
+ #                                       128, 4, 2,
+ #                                       10, 20)),
 #    'poolconv_10_50_20': (model_pool_conv_glob, (10,50,20)),
 #    'poolconv_10_30_20': (model_pool_conv_glob, (10,30,20)),
 #    'poolconv_10_30_30': (model_pool_conv_glob, (10,30,30)),
