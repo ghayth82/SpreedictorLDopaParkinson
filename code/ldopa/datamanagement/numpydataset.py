@@ -355,11 +355,19 @@ class NumpyDataset(object):
 
         return data
 
+    def transformDataSwapDims(self, data):
+        e = np.eye(3)
+        for t in range(data.shape[0]):
+            data[t] = np.matmul(data[t],
+                e[np.random.choice(3, size=3, replace=False)])
+        return data
+
     def transformDataAll(self, data):
         data = self.transformDataRotate(data)
         data = self.transformDataFlipSign(data)
         data = self.transformDataScaleTimeaxis(data)
         data = self.transformDataScaleMagnitude(data)
+   #     data = self.transformDataSwapDims(data)
 
         return data
 
