@@ -7,14 +7,17 @@ import numpy as np
 datadir = os.getenv('PARKINSON_DREAM_LDOPA_DATA')
 
 class LDopa(object):
-    def __init__(self, download_files = True, reload_ = False):
+    synapselocation = {'training':  'syn10495809', 'test': 'syn10701954'}
 
-        self.synapselocation_training = 'syn10495809'
-        self.synapselocation_test = 'syn10701954'
+    def __init__(self, download_files = True, reload_ = False, mode="training"):
+
+#        self.synapselocation_training = 'syn10495809'
+#        self.synapselocation_test = 'syn10701954'
+        self.mode = mode
         self.downloadpath = os.path.join(datadir,"download")
 
         self.cachepath = os.path.join(self.downloadpath,
-                            "tsv_file_map.pkl")
+                            "tsv_file_map_{}.pkl".format(mode))
 
         if not os.path.exists(self.downloadpath):
             os.mkdir(self.downloadpath)
@@ -35,7 +38,7 @@ class LDopa(object):
 
         syn.login()
 
-        selectstr = 'select * from {}'.format(self.synapselocation_training)
+        selectstr = 'select * from {}'.format(self.synapselocation[self.mode])
         results = syn.tableQuery(selectstr)
 
         df = results.asDataFrame()

@@ -1,12 +1,13 @@
 from __future__ import print_function, division
 import os
 import joblib
+import cv2
 import numpy as np
 from ldopa_data import LDopa
 import progressbar
 from keras.utils.np_utils import to_categorical
 import pandas as pd
-from .utils import batchRandomRotation
+from utils import batchRandomRotation
 import itertools
 
 
@@ -36,7 +37,7 @@ subch_tasklist = {'tre': tremor_tasks, 'dys': dyskin_tasks, 'bra': brakin_tasks 
 
 
 class NumpyDataset(object):
-    def __init__(self, outcome, task, reload_ = False):
+    def __init__(self, outcome, task, reload_ = False, mode="training"):
         """
         outcome = ["tre", "dys", "bra"]
         task = [specific tast, all tasks, or metadata]
@@ -45,52 +46,89 @@ class NumpyDataset(object):
         self.outcome = outcome
         self.task = task
         self.reload = reload_
+        self.mode = mode
 
         self.columns = ['x', 'y', 'z']
 
         if not hasattr(self, 'npcachefile'):
             self.npcachefile = os.path.join(datadir,
-                "{}_{}_{}.pkl".format(self.__class__.__name__.lower(), self.outcome, self.task))
+                "{}_{}_{}_{}.pkl".format(self.__class__.__name__.lower(),
+                    self.outcome, self.task, self.mode))
 
         self.load()
 
+    def loadAllTestTasks(self):
+        if not os.path.exists(self.npcachefile) or self.reload:
+
+            testdata = []
+            testfileid= []
+
+            for mode in ["training", "test"]:
+                cdtask, ld = self.getCdTasks(mode)
+
+                nrows = cdtask.shape[0]
+                print("all - nrows={}".format(nrows))
+
+                data, keepind = self.getTimeseriesData(cdtask, ld)
+
+                #labels = cdtask[outcome_var].values
+
+                #if outcome_var == 'tremorScore':
+                    #if self.mode == "training":
+                        #labels = to_categorical(labels, num_classes=5)
+                    #else:
+                        #labels = np.zeros((cdtask.shape[0], 5))
+
+                filehandles = cdtask.dataFileHandleId.values
+                testdata.append(data)
+                testfileid.append(filehandles)
+
+            testdata = np.concatenate(testdata, axis=0)
+            testfileid = np.concatenate(testfileid, axis=0)
+            joblib.dump((testdata, testfileid), self.npcachefile)
+
+        self.data, self.filehandles = joblib.load(self.npcachefile)
+
+    def getTimeseriesData(self, cdtask, ld):
+        nrows = cdtask.shape[0]
+        print("all - nrows={}".format(nrows))
+
+        # lets just always take 2000 timepoints
+        ndatapoints = 2000
+
+        data = np.zeros((nrows, ndatapoints, 3), dtype="float32")
+        keepind = np.ones((nrows), dtype=bool)
+
+        bar = progressbar.ProgressBar()
+
+        for idx in bar(range(nrows)):
+            df = ld.loadfile(cdtask['dataFileHandleId'].iloc[idx])
+
+            if df.empty or df[self.columns].isnull().any().any():
+                keepind[idx] = False
+                continue
+
+            df = self.getValues(df)
+            data[idx, :min(df.shape[0], ndatapoints), :] = df[:min(df.shape[0], ndatapoints), :]
+
+        return data, keepind
+
     def loadAllTasks(self):
         if not os.path.exists(self.npcachefile) or self.reload:
-            ld = LDopa()
-
             subch = self.outcome
             outcome_var = outcome_vars[subch]
 
-            cdtask = ld.commondescr[(ld.commondescr["task"].isin(subch_tasklist[subch])) & \
-                    ~(ld.commondescr[outcome_var].isnull())]
-            nrows = cdtask.shape[0]
+            cdtask, ld = self.getCdTasks("training")
 
-            # lets just always take 2000 timepoints
-            ndatapoints = 2000
-
-            data = np.zeros((nrows, ndatapoints, 3), dtype="float32")
-            keepind = np.ones((nrows), dtype=bool)
-
-            bar = progressbar.ProgressBar()
-
-            for idx in bar(range(nrows)):
-                df = ld.loadfile(cdtask['dataFileHandleId'].iloc[idx])
-
-                if df.empty or df[self.columns].isnull().any().any():
-                    keepind[idx] = False
-                    continue
-
-                df = self.getValues(df)
-                data[idx, :min(df.shape[0], ndatapoints), :] = df[:min(df.shape[0], ndatapoints), :]
+            data, keepind = self.getTimeseriesData(cdtask, ld)
 
             data = data[keepind]
+            print("all (after keepind) - nrows={}".format(data.shape[0]))
 
             labels = cdtask[outcome_var].values
 
-
-            #if outcome_var == 'tremorScore':
-                #labels = pd.DataFrame(to_categorical(labels, num_classes=5), index=labels.index)
-                #labels = cdtask[outcome_var].values
+            if outcome_var == 'tremorScore':
+                labels = to_categorical(labels, num_classes=5)
 
             labels = labels[keepind]
             patients = cdtask["patient"].iloc[keepind].values
@@ -145,8 +183,9 @@ class NumpyDataset(object):
 
             labels = cdtask[outcome_var].values
 
-            #if outcome_var == 'tremorScore':
-                #labels = pd.DataFrame(to_categorical(labels, num_classes=5), index=labels.index)
+            if outcome_var == 'tremorScore':
+                labels = to_categorical(labels, num_classes=5)
+                #labels = labels.values
 
             labels = labels[keepind]
 
@@ -158,56 +197,93 @@ class NumpyDataset(object):
 
         self.data, self.labels, self.keepind, self.patient = joblib.load(self.npcachefile)
 
+    def getCdTasks(self, mode):
+        ld = LDopa(mode=mode)
+
+        subch = self.outcome
+        outcome_var = outcome_vars[subch]
+
+        if mode == "training":
+            cdtask = ld.commondescr[~(ld.commondescr[outcome_var].isnull())]
+        else:
+            cdtask = ld.commondescr[ld.commondescr[outcome_var] == "Score"]
+        return cdtask, ld
+
+
+    def loadMetaTest(self):
+        if not os.path.exists(self.npcachefile) or self.reload:
+            testdata = []
+            testfileid= []
+
+            for mode in ["training", "test"]:
+
+                cdtask, ld = self.getCdTasks(mode)
+
+                data = self.getMetaData(cdtask)
+                #data, keepind = getTimeseriesData(cdtask, ld)
+
+                #labels = cdtask[outcome_var].values
+
+                #if outcome_var == 'tremorScore':
+                    #if self.mode == "training":
+                        #labels = to_categorical(labels, num_classes=5)
+                    #else:
+                        #labels = np.zeros((cdtask.shape[0], 5))
+
+                filehandles = cdtask.dataFileHandleId.values
+                testdata.append(data)
+                testfileid.append(filehandles)
+
+                #joblib.dump((data, filehandles), self.npcachefile)
+            testdata = np.concatenate(testdata, axis=0)
+            testfileid = np.concatenate(testfileid, axis=0)
+            joblib.dump((testdata, testfileid), self.npcachefile)
+
+        self.data, self.filehandles = joblib.load(self.npcachefile)
+
+    def getMetaData(self, cdtask):
+        device_data = cdtask["device"].apply(lambda x: 1 if x=="GENEActiv" else 0)
+        #session_data = ld.commondescr["session"].apply(lambda x: 1 if x==1 else 0)
+        site_data = cdtask["site"].apply(lambda x: 1 if x=="Boston" else 0)
+        tasks = cdtask["task"].values
+
+        tsks = np.unique(tasks)
+
+        df = pd.DataFrame()
+        for t in tsks:
+            df[t] = cdtask["task"].apply(lambda x: 1 if x==t else 0)
+        task_data = df.values
+        visit_data = cdtask["visit"].apply(lambda x: 1 if x==1 else 0)
+        deviceside_data = cdtask["deviceSide"].apply(lambda x: 1 if x=="Right" else 0)
+
+        data = np.concatenate((device_data[:, np.newaxis],
+                    site_data[:, np.newaxis], task_data,
+                    visit_data[:, np.newaxis],
+                    deviceside_data[:, np.newaxis]), axis=1)
+
+        return data
+
+
 
     def loadMeta(self):
         if not os.path.exists(self.npcachefile) or self.reload:
-
-            ld = LDopa()
             subch = self.outcome
+            outcome_var = outcome_vars[subch]
 
-            outcome_var = outcome_vars[self.outcome]
+            cdtask, ld = self.getCdTasks("training")
 
 
-            cdtask = ld.commondescr[(ld.commondescr["task"].isin(subch_tasklist[subch])) & \
-                    ~(ld.commondescr[outcome_var].isnull())]
+            _, keepind = self.getTimeseriesData(cdtask, ld)
 
-            nrows = cdtask.shape[0]
-
-            device_data = cdtask["device"].apply(lambda x: 1 if x=="GENEActiv" else 0)
-            #session_data = ld.commondescr["session"].apply(lambda x: 1 if x==1 else 0)
-            site_data = cdtask["site"].apply(lambda x: 1 if x=="Boston" else 0)
-            tasks = cdtask["task"].values
-
-            tsks = np.unique(tasks)
-
-            df = pd.DataFrame()
-            for t in tsks:
-                df[t] = cdtask["task"].apply(lambda x: 1 if x==t else 0)
-            task_data = df.values
-            visit_data = cdtask["visit"].apply(lambda x: 1 if x==1 else 0)
-            deviceside_data = cdtask["deviceSide"].apply(lambda x: 1 if x=="Right" else 0)
-
-            keepind = np.ones((nrows), dtype=bool)
-
-            bar = progressbar.ProgressBar()
-
-            for idx in bar(range(nrows)):
-                df = ld.loadfile(cdtask['dataFileHandleId'].iloc[idx])
-
-                if df.empty or df["x"].isnull().any().any():
-                    keepind[idx] = False
-
-            data = np.concatenate((device_data[:, np.newaxis],
-                        site_data[:, np.newaxis], task_data,
-                        visit_data[:, np.newaxis],
-                        deviceside_data[:, np.newaxis]), axis=1)
+            data = self.getMetaData(cdtask)
 
             data = data[keepind]
+            print("meta (after keepind) - nrows={}".format(data.shape))
 
             labels = cdtask[outcome_var].values
 
-            #if outcome_var == 'tremorScore':
-                #labels = pd.DataFrame(to_categorical(labels, num_classes=5), index=labels.index)
+            if outcome_var == 'tremorScore':
+                labels = to_categorical(labels, num_classes=5)
 
             labels = labels[keepind]
 
@@ -220,10 +296,18 @@ class NumpyDataset(object):
         self.data, self.labels, self.keepind, self.patient = joblib.load(self.npcachefile)
 
     def load(self):
+
         if self.task == "all":
-            self.loadAllTasks()
+            if self.mode == "training":
+                self.loadAllTasks()
+            else:
+                self.loadAllTestTasks()
+
         elif self.task == "meta":
-            self.loadMeta()
+            if self.mode == "training":
+                self.loadMeta()
+            else:
+                self.loadMetaTest()
         else:
             self.loadSpecificTask()
 
@@ -250,12 +334,34 @@ class NumpyDataset(object):
 
         return data
 
+    def transformDataScaleTimeaxis(self, data):
+        for t in range(data.shape[0]):
+            rdata = cv2.resize(data[t], (3, int(data[t].shape[0]*np.random.uniform(0.8,1.2))))
+            if rdata.shape[0] <= data[t].shape[0]:
+                data[t,:rdata.shape[0],:] = rdata
+            else:
+                data[t] = rdata[data.shape[0], :]
+        return data
+
+    def transformDataScaleMagnitude(self, data):
+        for t in range(data.shape[0]):
+            data[t] =  data[t] * np.random.uniform(0.8,1.2)
+        return data
+
+
     def transformDataFlipRotate(self, data):
         data = self.transformDataRotate(data)
         data = self.transformDataFlipSign(data)
 
         return data
 
+    def transformDataAll(self, data):
+        data = self.transformDataRotate(data)
+        data = self.transformDataFlipSign(data)
+        data = self.transformDataScaleTimeaxis(data)
+        data = self.transformDataScaleMagnitude(data)
+
+        return data
 
     @property
     def patient(self):
