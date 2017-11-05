@@ -200,7 +200,7 @@ class Classifier(object):
                         augment),
                 steps_per_epoch = len(train_idxs)//bs + \
                     (1 if len(train_idxs)%bs > 0 else 0),
-                epochs = self.epochs//2,
+                epochs = self.epochs,
                 use_multiprocessing = True)
 
             self.logger.info("Performance after leaving out {} ({} epochs) loss {:1.3f}, acc {:1.3f}".format(
@@ -244,7 +244,7 @@ class Classifier(object):
                     augment),
             steps_per_epoch = len(train_idxs)//bs + \
                 (1 if len(train_idxs)%bs > 0 else 0),
-            epochs = self.epochs, use_multiprocessing = True, callbacks = [tb_cbl])
+            epochs = 800, use_multiprocessing = True, callbacks = [tb_cbl])
 
 
         predictions = self.dnn.predict_generator(
