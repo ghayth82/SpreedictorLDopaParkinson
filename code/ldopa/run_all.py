@@ -36,6 +36,8 @@ parser.add_argument('--rofl', dest="rofl", action='store_true',
         default=False, help = "Augment by flipping the sign and rotating")
 parser.add_argument('--allaug', dest="allaug",
         default=False, action='store_true', help = "Data augmentation with all options")
+parser.add_argument('--dry', dest="dry",
+        default=False, action='store_true', help = "Dryrun to see which combs. are missing.")
 
 args = parser.parse_args()
 print(args.datafilter)
@@ -56,23 +58,23 @@ for comb in all_combinations:
 
     #name = '.'.join([args.data, args.model])
 
-    print("Running {}-{}".format(comb[0],comb[1]))
+    #print("Running {}-{}".format(comb[0],comb[1]))
 
     name = '.'.join(comb)
     #continue
 
     if args.noise:
         name = '_'.join([name, "aug"])
-    print("--rotate {}".format(args.rotate))
+    #print("--rotate {}".format(args.rotate))
     if args.rotate:
         name = '_'.join([name, "rot"])
-    print("--flip {}".format(args.flip))
+    #print("--flip {}".format(args.flip))
     if args.flip:
         name = '_'.join([name, "flip"])
-    print("--rofl {}".format(args.rofl))
+    #print("--rofl {}".format(args.rofl))
     if args.rofl:
         name = '_'.join([name, "rofl"])
-    print("--rofl {}".format(args.rofl))
+    #print("--rofl {}".format(args.rofl))
     if args.allaug:
         name = '_'.join([name, "allaug"])
     print(name)
@@ -108,6 +110,10 @@ for comb in all_combinations:
     if model.summaryExists() and not args.overwrite:
         print "{} exists, skipping".format(os.path.basename(model.summary_file))
     else:
-        model.fit(args.noise|args.rotate|args.flip|args.rofl)
+        if args.dry:
+            print("todo: {}".format(os.path.basename(model.summary_file)))
+        else:
+            print("producing: {}".format(os.path.basename(model.summary_file)))
+            model.fit(args.noise|args.rotate|args.flip|args.rofl)
 
-        model.saveModel()
+            model.saveModel()
