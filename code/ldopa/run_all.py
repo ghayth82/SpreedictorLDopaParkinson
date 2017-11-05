@@ -34,6 +34,8 @@ parser.add_argument('--flip', dest="flip", action='store_true',
         default=False, help = "Augment by flipping the sign")
 parser.add_argument('--rofl', dest="rofl", action='store_true',
         default=False, help = "Augment by flipping the sign and rotating")
+parser.add_argument('--allaug', dest="allaug",
+        default=False, action='store_true', help = "Data augmentation with all options")
 
 args = parser.parse_args()
 print(args.datafilter)
@@ -61,18 +63,18 @@ for comb in all_combinations:
 
     if args.noise:
         name = '_'.join([name, "aug"])
-    print(name)
     print("--rotate {}".format(args.rotate))
     if args.rotate:
         name = '_'.join([name, "rot"])
-    print(name)
     print("--flip {}".format(args.flip))
     if args.flip:
         name = '_'.join([name, "flip"])
-    print(name)
     print("--rofl {}".format(args.rofl))
     if args.rofl:
         name = '_'.join([name, "rofl"])
+    print("--rofl {}".format(args.rofl))
+    if args.allaug:
+        name = '_'.join([name, "allaug"])
     print(name)
 
 
@@ -96,6 +98,9 @@ for comb in all_combinations:
         if args.rofl:
             comb += ("rofl",)
             da[k].transformData = da[k].transformDataFlipRotate
+        if args.allaug:
+            comb += ("allaug",)
+            da[k].transformData = da[k].transformDataAll
 
 
     model = Classifier(da, modeldefs[comb[1]], comb=list(comb), name=name, epochs = args.epochs)
