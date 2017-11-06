@@ -1,4 +1,4 @@
-from .numpydataset import NumpyDataset
+from numpydataset import NumpyDataset
 from scipy import signal
 import numpy as np
 import os
@@ -7,20 +7,20 @@ datadir = os.getenv('PARKINSON_DREAM_LDOPA_DATA')
 
 class FilteredData(NumpyDataset):
 
-    def __init__(self, outcome, task, filter_type, freqs, reload_=False):
+    def __init__(self, outcome, task, filter_type, freqs, reload_=False, mode="training"):
         self.filter_type = filter_type
         self.freqs = freqs
         self.filter = self.createFilter(filter_type, freqs)
 
         self.npcachefile = os.path.join(datadir,
-                                        "{}_{}_{}_{}_{}.pkl".format(
+                                        "{}_{}_{}_{}_{}_{}.pkl".format(
                                             self.__class__.__name__.lower(),
                                             filter_type,
                                             '-'.join(["{}".format(x) for x in freqs]),
                                             outcome,
-                                            task))
+                                            task, mode))
 
-        NumpyDataset.__init__(self, outcome, task, reload_)
+        NumpyDataset.__init__(self, outcome, task, reload_, mode)
 
     def getValues(self, df):
         M = df[self.columns].values
@@ -54,3 +54,17 @@ if __name__ == "__main__":
 
     td=FilteredData("tre", "all", "fh", [0.5],reload_=True)
     td=FilteredData("tre", "all", "fh", [0.5])
+    assert len(td) == 3440, "f-tre-all-training len wrong"
+
+    td=FilteredData("tre", "all", "fh", [0.5],reload_=True, mode="test")
+    td=FilteredData("tre", "all", "fh", [0.5], mode="test")
+    assert len(td) == 5167, "f-tre-all-test len wrong"
+
+    td=FilteredData("tre", "meta", "fh", [0.5],reload_=True)
+    td=FilteredData("tre", "meta", "fh", [0.5])
+    assert len(td) == 3440, "f-tre-meta-training len wrong"
+
+    td=FilteredData("tre", "meta", "fh", [0.5],reload_=True, mode="test")
+    td=FilteredData("tre", "meta", "fh", [0.5], mode="test")
+    assert len(td) == 5167, "f-tre-meta-test len wrong"
+

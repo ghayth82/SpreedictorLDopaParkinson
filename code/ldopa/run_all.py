@@ -34,6 +34,10 @@ parser.add_argument('--flip', dest="flip", action='store_true',
         default=False, help = "Augment by flipping the sign")
 parser.add_argument('--rofl', dest="rofl", action='store_true',
         default=False, help = "Augment by flipping the sign and rotating")
+parser.add_argument('--allaug', dest="allaug",
+        default=False, action='store_true', help = "Data augmentation with all options")
+parser.add_argument('--dry', dest="dry",
+        default=False, action='store_true', help = "Dryrun to see which combs. are missing.")
 
 args = parser.parse_args()
 print(args.datafilter)
@@ -54,39 +58,51 @@ for comb in all_combinations:
 
     #name = '.'.join([args.data, args.model])
 
-    print("Running {}-{}".format(comb[0],comb[1]))
+    #print("Running {}-{}".format(comb[0],comb[1]))
 
     name = '.'.join(comb)
     #continue
 
     if args.noise:
         name = '_'.join([name, "aug"])
-    print(name)
-    print("--rotate {}".format(args.rotate))
+    #print("--rotate {}".format(args.rotate))
     if args.rotate:
         name = '_'.join([name, "rot"])
-    print(name)
-    print("--flip {}".format(args.flip))
+    #print("--flip {}".format(args.flip))
     if args.flip:
         name = '_'.join([name, "flip"])
-    print(name)
-    print("--rofl {}".format(args.rofl))
+    #print("--rofl {}".format(args.rofl))
     if args.rofl:
         name = '_'.join([name, "rofl"])
+    #print("--rofl {}".format(args.rofl))
+    if args.allaug:
+        name = '_'.join([name, "allaug"])
     print(name)
 
 
     da = {}
     for k in dataset[comb[0]].keys():
         da[k] = get_dataset(dataset[comb[0]][k])
+        if k != 'input_1':
+            # quick-hack: for meta + timeseries
+            # 'input_1' would be the timeseries
+            # and 'input_2' the metadataset, which does not require transformData
+            continue
         if args.noise:
+            comb += ("noise",)
             da[k].transformData = da[k].transformDataNoise
         if args.rotate:
+            comb += ("rotate",)
             da[k].transformData = da[k].transformDataRotate
         if args.flip:
+            comb += ("flip",)
             da[k].transformData = da[k].transformDataFlipSign
         if args.rofl:
+            comb += ("rofl",)
             da[k].transformData = da[k].transformDataFlipRotate
+        if args.allaug:
+            comb += ("allaug",)
+            da[k].transformData = da[k].transformDataAll
 
 
     model = Classifier(da, modeldefs[comb[1]], comb=list(comb), name=name, epochs = args.epochs)
@@ -94,6 +110,10 @@ for comb in all_combinations:
     if model.summaryExists() and not args.overwrite:
         print "{} exists, skipping".format(os.path.basename(model.summary_file))
     else:
-        model.fit(args.noise|args.rotate|args.flip|args.rofl)
+        if args.dry:
+            print("todo: {}".format(os.path.basename(model.summary_file)))
+        else:
+            print("producing: {}".format(os.path.basename(model.summary_file)))
+            model.fit(args.noise|args.rotate|args.flip|args.rofl)
 
-        model.saveModel()
+            model.saveModel()

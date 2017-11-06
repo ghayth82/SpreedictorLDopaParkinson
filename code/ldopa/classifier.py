@@ -21,23 +21,12 @@ import pandas as pd
 import numpy as np
 import os
 from sklearn import metrics
+from scipy.stats import binom
 import sys
 
 from scoring.predictionprobability import pk
 
 
-def log_choose(n, k):
-    x = K.epsilon()
-    for i in range(n):
-        x += K.log(i)
-    for i in range(k):
-        x -= K.log(i)
-    for i in range(n-k):
-        x -= K.log(i)
-    return x
-
-def binomial_loss(y_true, y_pred):
-    return K.mean(-log_choose(4, y_true) - y_true*K.log(y_pred) - (4-y_true)*K.log(1-y_pred))
 
 
 outputdir = os.getenv('PARKINSON_DREAM_LDOPA_DATA')
@@ -45,6 +34,7 @@ outputdir = os.getenv('PARKINSON_DREAM_LDOPA_DATA')
 def generate_fit_data(dataset, indices, sample_weights, batchsize, augment = True):
     while 1:
         ib = 0
+        np.random.shuffle(indices)
         if len(indices) == 0:
             raise Exception("index list is empty")
         while ib < (len(indices)//batchsize + (1 if len(indices)%batchsize > 0 else 0)):
@@ -52,6 +42,20 @@ def generate_fit_data(dataset, indices, sample_weights, batchsize, augment = Tru
             for ipname in dataset.keys():
                 Xinput[ipname] = dataset[ipname].getData(
                     indices[ib*batchsize:(ib+1)*batchsize], augment).copy()
+
+            if len(dataset.keys()) == 2 and False:
+                # special case for meta + timeseries
+                # here, either meta or timeseries might be dropped out
+                for i in range(Xinput[ipname].shape[0]):
+                    c = np.random.choice(np.arange(3))
+                    if c == 0:
+                        Xinput['input_1'] = np.zeros(Xinput['input_1'].shape, dtype="float32")
+                    elif c == 1:
+                        Xinput['input_2'] = np.zeros(Xinput['input_2'].shape, dtype="float32")
+                    else:
+                        #keep both
+                        pass
+
 
             yinput = dataset['input_1'].labels[
                     indices[ib*batchsize:(ib+1)*batchsize]].copy()
@@ -81,7 +85,7 @@ def generate_predict_data(dataset, indices, batchsize, augment = True):
 
 class Classifier(object):
     n_outputs = {'bra':1, 'dys':1, 'tre':5}
-    act_fct = {'bra':'sigmoid', 'dys':'sigmoid', 'tre':'softmax'}
+    act_fct = {'bra':'sigmoid', 'dys':'sigmoid', 'tre': 'softmax'}
     loss_fct = {'bra':'binary_crossentropy', 'dys': 'binary_crossentropy',
             'tre': 'categorical_crossentropy'}
     # todo evaluation method also depends on task.
@@ -112,13 +116,14 @@ class Classifier(object):
         self.data = datadict
         self.batchsize = 100
 
-        patient_id = datadict['input_1'].patient
+        #patient_id = datadict['input_1'].patient
 
         # determine sample weights
-        hcdf = pd.DataFrame(patient_id, columns=["patientId"])
-        hcvc = hcdf['patientId'].value_counts()
-        hcdf["nsamples"] = hcdf['patientId'].map(lambda r: hcvc[r])
-        self.sample_weights = 1. / hcdf["nsamples"].values
+        #hcdf = pd.DataFrame(patient_id, columns=["patientId"])
+        #hcvc = hcdf['patientId'].value_counts()
+        #hcdf["nsamples"] = hcdf['patientId'].map(lambda r: hcvc[r])
+        #self.sample_weights = 1. / hcdf["nsamples"].values
+        self.sample_weights = np.ones((len(datadict['input_1']), ), dtype="float32")
 
 
         self.logger.info("Input dimensions:")
@@ -145,11 +150,14 @@ class Classifier(object):
 
         inputs, outputs = self.modelfct(self.data, self.modelparams)
 
+        self.feature_predictor = Model(inputs = inputs, outputs = outputs)
+
         outputs = Dense(self.n_outputs[self.outcome_score],
             activation=self.act_fct[self.outcome_score],
             name="main_output")(outputs)
 
         model = Model(inputs = inputs, outputs = outputs)
+
         model.compile(loss=self.loss_fct[self.outcome_score],
                     optimizer='adadelta',
                     metrics=['accuracy'])
@@ -160,14 +168,10 @@ class Classifier(object):
     def fit(self, augment = True):
         self.logger.info("Start training ...")
 
-
-
         bs = self.batchsize
 
         patient_id = self.data['input_1'].patient
         individuals = np.unique(patient_id)
-
-        perf = pd.DataFrame()
 
         predictions = np.zeros((len(patient_id),
                 self.n_outputs[self.outcome_score]),dtype="float32")
@@ -190,10 +194,6 @@ class Classifier(object):
             self.logger.info(validate_idxs)
 
             checker[validate_idxs] = ~checker[validate_idxs]
-            #train_individuals = np.setdiff1d(individuals, [leave_out])
-
-            #train_idxs = np.where(np.in1d(patient_id, train_individuals))[0]
-            #validate_idxs = np.where(np.in1d(patient_id, leave_out))[0]
 
             history = tmpmodel.fit_generator(
                 generate_fit_data(self.data, train_idxs, self.sample_weights, bs,
@@ -219,14 +219,10 @@ class Classifier(object):
             del tmpmodel
             K.clear_session()
 
-            #perf = perf.append(self.evaluate(train_idxs, validate_idxs, leave_out))
-
         self.logger.info("Finished training ...")
         assert np.all(checker), "not all validation indices are present. WTF!"
 
-        perf = self.evaluate(predictions)
-
-        perf.to_csv(self.summary_file, header=False, index=False, sep="\t")
+        vaperf = self.evaluate(predictions)
 
         self.logger.info("Results written to {}".format(os.path.basename(self.summary_file)))
 
@@ -248,20 +244,22 @@ class Classifier(object):
                     augment),
             steps_per_epoch = len(train_idxs)//bs + \
                 (1 if len(train_idxs)%bs > 0 else 0),
-            epochs = self.epochs, use_multiprocessing = True, callbacks = [tb_cbl])
+            epochs = 800, use_multiprocessing = True, callbacks = [tb_cbl])
 
 
-       # predictions = self.dnn.predict_generator(
-       #     generate_predict_data(self.data,
-       #     train_idxs, self.batchsize, False),
-       #     steps = len(train_idxs)//self.batchsize +\
-       #      (1 if len(train_idxs)//self.batchsize > 0 else 0))
+        predictions = self.dnn.predict_generator(
+            generate_predict_data(self.data,
+            train_idxs, self.batchsize, False),
+            steps = len(train_idxs)//self.batchsize +\
+             (1 if len(train_idxs)//self.batchsize > 0 else 0))
 
 
-        #perf = self.evaluate(predictions)
+        trperf = self.evaluate(predictions)
 
-        #with open(self.summary_file, "a") as f:
-        #    perf.to_csv(f, header=False, index=False, sep="\t")
+        perf = pd.DataFrame(data=np.concatenate((vaperf.values,
+                trperf.values[:,2:]), axis=1))
+
+        perf.to_csv(self.summary_file, header=False, index=False, sep="\t")
 
         self.dnn.summary()
         self.dnn.summary(print_fn = self.logger.info)
@@ -273,7 +271,7 @@ class Classifier(object):
         self.logger.info("Save model {}".format(filename))
         self.dnn.save(filename)
 
-    def loadModel(self, name):
+    def loadModel(self):
         filename = outputdir + "/models/" + self.name + ".h5"
         self.logger.info("Load model {}".format(filename))
         self.dnn = load_model(filename)
@@ -283,27 +281,40 @@ class Classifier(object):
 
         yinput = self.data['input_1'].labels
 
-        results = self.comb
+        results = []
+        if len(self.comb) == 2:
+            results += self.comb
+        else:
+            results += [self.comb[0], '.'.join(self.comb[1:])]
 
-        #pd.DataFrame({"true":yinput, "pred":predicted[:,0]}
-        #    ).to_csv("test.csv", index=False)
-
-        if len(yinput.shape) > 1:
-            # tremor
-            class_true = np.where(yinput)[1]
-            class_predicted = np.argmax(predicted, axis=1)
-            pkscore = pk(class_true, class_predicted)
-
-            results += [pkscore]
-
-        elif len(np.unique(yinput)) > 1 and not np.any(np.isnan(predicted)):
+        if len(np.unique(yinput)) == 2 and len(yinput.shape) == 1:
+            # WK: not sure if np.isnan is required. I never experienced issues with that
+            #elif len(np.unique(yinput)) > 1 and not np.any(np.isnan(predicted)):
             auroc = metrics.roc_auc_score(yinput, predicted)
             prc = metrics.average_precision_score(yinput, predicted)
             acc = metrics.accuracy_score(yinput, predicted.round())
             f1score = metrics.f1_score(yinput, predicted.round())
 
             results += [auroc, prc, f1score, acc]
+
+        elif len(yinput.shape) > 1:
+            # this is used for tremorScore where values from 0 to 4 are possible
+            class_true = np.where(yinput)[1]
+            class_predicted = np.argmax(predicted, axis=1)
+
+#            class_true = yinput
+#            class_predicted = np.argmax(binom.pmf(np.arange(4), 4, predicted))
+#            class_predicted = np.array([ np.argmax(binom.pmf(np.arange(4), \
+#                    4, p)) for p in predicted])
+            #class_predicted = np.argmax(predicted, axis=1)
+            pkscore = pk(class_true, class_predicted)
+            acc = metrics.accuracy_score(class_true, class_predicted)
+
+            results += [pkscore, acc]
+
         else:
+            # this is checked if only one class is left
+            # then we cannot score
             auroc = np.nan
             prc = np.nan
             acc = np.nan
@@ -311,16 +322,20 @@ class Classifier(object):
 
             results += [auroc, prc, f1score, acc]
 
-
-
-
-        print(results)
         return pd.DataFrame([results])
-#                columns=["dataset", "model"] +
-#                    ['auROC', 'auPRC', 'F1', 'Accuracy'])
 
-    def featurize(self):
-        pass
+    def featurize(self, X):
+
+        self.defineModel()
+#        for idxs in range(len(self.data)):
+        #idxs = np.arange(len(self.data['input_1']))
+        #rest = 1 if len(idxs)%self.batchsize > 0 else 0
+
+        #print("idxs ={}, steps = {}".format(idxs, len(idxs)//self.batchsize + rest))
+
+        scores = self.feature_predictor.predict(X)
+        return scores
+
 
 if __name__ == "__main__":
 
@@ -349,6 +364,8 @@ if __name__ == "__main__":
             default=False, action='store_true', help = "Data augmentation by flipping the coord. signs")
     parser.add_argument('--rofl', dest="rofl",
             default=False, action='store_true', help = "Data augmentation by flipping and rotation")
+    parser.add_argument('--allaug', dest="allaug",
+            default=False, action='store_true', help = "Data augmentation with all options")
 
     args = parser.parse_args()
 
@@ -373,9 +390,15 @@ if __name__ == "__main__":
         if args.rofl:
             comb += ["rofl"]
             da[k].transformData = da[k].transformDataFlipRotate
+        if args.allaug:
+            comb += ["allaug"]
+            da[k].transformData = da[k].transformDataAll
+
+    name = '.'.join(comb)
 
     model = Classifier(da,
             modeldefs[args.model], comb=comb,
+                        name=name,
                         epochs = args.epochs)
 
     model.fit(args.noise|args.rotate|args.flip|args.rofl)
