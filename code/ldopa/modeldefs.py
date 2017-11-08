@@ -184,6 +184,83 @@ def deep_conv(data, paramdims):
 
     return [input1, input2], output
 
+
+
+def deep_conv_nometa(data, paramdims):
+
+    # first input
+    input1 = Input(shape=data['input_1'].shape, name='input_1')
+    #1
+    tlayer = Conv1D(paramdims[0], kernel_size=(paramdims[1]),
+            activation = 'relu')(input1)
+
+    tlayer = BatchNormalization()(tlayer)
+
+    tlayer = MaxPooling1D(pool_size=paramdims[2])(tlayer)
+
+    #l2
+    tlayer = Conv1D(paramdims[3], kernel_size=(paramdims[4]),
+            activation = 'relu')(tlayer)
+    tlayer = BatchNormalization()(tlayer)
+    tlayer = MaxPooling1D(pool_size=paramdims[5])(tlayer)
+
+    #l3
+    tlayer = Conv1D(paramdims[6], kernel_size=(paramdims[7]),
+            activation = 'relu')(tlayer)
+
+    tlayer = BatchNormalization()(tlayer)
+
+    tlayer = MaxPooling1D(pool_size=paramdims[8])(tlayer)
+
+    #l4
+    tlayer = Conv1D(paramdims[9], kernel_size=(paramdims[10]),
+            activation = 'relu')(tlayer)
+
+    tlayer = BatchNormalization()(tlayer)
+
+    tlayer = MaxPooling1D(pool_size=paramdims[11])(tlayer)
+
+    #l5
+    tlayer = Conv1D(paramdims[12], kernel_size=(paramdims[13]),
+            activation = 'relu')(tlayer)
+
+    tlayer = BatchNormalization()(tlayer)
+
+    tlayer = MaxPooling1D(pool_size=paramdims[14])(tlayer)
+
+    #l6
+    tlayer = Conv1D(paramdims[15], kernel_size=(paramdims[16]),
+            activation = 'relu')(tlayer)
+
+    tlayer = BatchNormalization()(tlayer)
+
+    tlayer = MaxPooling1D(pool_size=paramdims[17])(tlayer)
+
+    #l7
+    tlayer = Conv1D(paramdims[18], kernel_size=(paramdims[19]),
+            activation = 'relu')(tlayer)
+
+    tlayer = BatchNormalization()(tlayer)
+
+    tlayer = MaxPooling1D(pool_size=paramdims[20])(tlayer)
+
+    #l7
+    tlayer = Conv1D(paramdims[21], kernel_size=(paramdims[22]),
+            activation = 'relu')(tlayer)
+
+    tlayer = BatchNormalization()(tlayer)
+
+    tlayer = MaxPooling1D(pool_size=paramdims[23])(tlayer)
+
+
+    tlayer = GlobalAveragePooling1D()(tlayer)
+    #tlayer = Dropout(0.5)(tlayer)
+
+
+    output = Dense(paramdims[24], activation = 'relu')(tlayer)
+
+    return input1, output
+
 def model_conv_3l_glob(data, paramdims):
     '''
     Conv1D:
@@ -264,15 +341,33 @@ modeldefs = {
                                         128, 3, 2,
                                         128, 4, 2,
                                         10, 20)),
- #   'metatime_deep_conv_v2': (deep_conv, (16, 6, 2,
- #                                       16, 4, 2,
- #                                       32, 3, 2,
- #                                       32, 3, 2,
- #                                       64, 3, 2,
- #                                       64, 4, 2,
- #                                       128, 3, 2,
- #                                       128, 4, 2,
- #                                       10, 20)),
+    #'metatime_deep_conv_v2': (deep_conv, (16, 6, 2,
+    #                                    16, 4, 2,
+    #                                    32, 3, 2,
+    #                                    32, 3, 2,
+    #                                    64, 3, 2,
+    #                                    64, 4, 2,
+    #                                    128, 3, 2,
+    #                                    128, 4, 2,
+    #                                    10, 20)),
+    'time_deep_conv': (deep_conv_nometa, (8, 3, 2,
+                                       16, 4, 2,
+                                       32, 3, 2,
+                                       32, 3, 2,
+                                       64, 3, 2,
+                                       64, 4, 2,
+                                       128, 3, 2,
+                                       128, 4, 2,
+                                       20)),
+    'time_deep_conv_v2': (deep_conv_nometa, (16, 6, 2,
+                                          16, 4, 2,
+                                          32, 3, 2,
+                                          32, 3, 2,
+                                          64, 3, 2,
+                                          64, 4, 2,
+                                          128, 3, 2,
+                                          128, 4, 2,
+                                          20)),
 #    'poolconv_10_50_20': (model_pool_conv_glob, (10,50,20)),
 #    'poolconv_10_30_20': (model_pool_conv_glob, (10,30,20)),
 #    'poolconv_10_30_30': (model_pool_conv_glob, (10,30,30)),

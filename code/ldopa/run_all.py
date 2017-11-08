@@ -35,7 +35,17 @@ parser.add_argument('--flip', dest="flip", action='store_true',
 parser.add_argument('--rofl', dest="rofl", action='store_true',
         default=False, help = "Augment by flipping the sign and rotating")
 parser.add_argument('--allaug', dest="allaug",
-        default=False, action='store_true', help = "Data augmentation with all options")
+        default=False, action='store_true', help = "Data augmentation with rotate, flip, scale time, scale magnitude")
+
+parser.add_argument('--rotfull', dest="rotfull",
+        default=False, action='store_true', help = "Augment by random rotations around the full sphere")
+parser.add_argument('--permute', dest="permute",
+        default=False, action='store_true', help = "Augment by permutation")
+parser.add_argument('--reverse', dest="reverse",
+        default=False, action='store_true', help = "Augment by reversal")
+parser.add_argument('--allaug_v2', dest="allaug_v2",
+        default=False, action='store_true', help = "Data augmentation with rotate full, permute, scale time, scale magnitude")
+
 parser.add_argument('--dry', dest="dry",
         default=False, action='store_true', help = "Dryrun to see which combs. are missing.")
 
@@ -65,18 +75,23 @@ for comb in all_combinations:
 
     if args.noise:
         name = '_'.join([name, "aug"])
-    #print("--rotate {}".format(args.rotate))
     if args.rotate:
         name = '_'.join([name, "rot"])
-    #print("--flip {}".format(args.flip))
     if args.flip:
         name = '_'.join([name, "flip"])
-    #print("--rofl {}".format(args.rofl))
     if args.rofl:
         name = '_'.join([name, "rofl"])
-    #print("--rofl {}".format(args.rofl))
     if args.allaug:
         name = '_'.join([name, "allaug"])
+
+    if args.rotfull:
+        name = '_'.join([name, "rotfull"])
+    if args.reverse:
+        name = '_'.join([name, "reverse"])
+    if args.permute:
+        name = '_'.join([name, "permute"])
+    if args.allaug_v2:
+        name = '_'.join([name, "allaug_v2"])
     print(name)
 
 
@@ -103,6 +118,19 @@ for comb in all_combinations:
         if args.allaug:
             comb += ("allaug",)
             da[k].transformData = da[k].transformDataAll
+
+        if args.rotfull:
+            comb += ("rotfull",)
+            da[k].transformData = da[k].transformDataRotateFull
+        if args.reverse:
+            comb += ("reverse",)
+            da[k].transformData = da[k].transformDataReverse
+        if args.permute:
+            comb += ("permute",)
+            da[k].transformData = da[k].transformDataPermute
+        if args.allaug_v2:
+            comb += ("allaug_v2",)
+            da[k].transformData = da[k].transformDataAll_v2
 
 
     model = Classifier(da, modeldefs[comb[1]], comb=list(comb), name=name, epochs = args.epochs)

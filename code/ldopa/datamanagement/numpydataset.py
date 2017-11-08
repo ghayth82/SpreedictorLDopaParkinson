@@ -7,7 +7,7 @@ from ldopa_data import LDopa
 import progressbar
 from keras.utils.np_utils import to_categorical
 import pandas as pd
-from utils import batchRandomRotation
+from utils import batchRandomRotation, batchRandomRotationFull
 import itertools
 
 
@@ -16,19 +16,19 @@ outcome_vars = {'tre': 'tremorScore', 'dys' : 'dyskinesiaScore', 'bra' : 'bradyk
 
 
 tremor_tasks = ['drnkg', 'fldng',
-                'ramr1', 'raml1',
+                #'ramr1', 'raml1',
                 'orgpa',
-                'ftnl1', 'ftnr1',
+                #'ftnl1', 'ftnr1',
                 'ntblt',
                 'ramr', 'raml', 'ftnl', 'ftnr',
                 'ram', 'ftn']
 
-dyskin_tasks = ['ramr1', 'raml1', 'ftnl1', 'ftnr1',
+dyskin_tasks = [#'ramr1', 'raml1', 'ftnl1', 'ftnr1',
                 'ramr', 'raml','ftnl', 'ftnr',
                 'ram', 'ftn']
 
 brakin_tasks = ['drnkg', 'fldng', 'orgpa',
-                'ramr1', 'raml1', 'ftnl1', 'ftnr1',
+                #'ramr1', 'raml1', 'ftnl1', 'ftnr1',
                 'ramr', 'raml','ftnl', 'ftnr',
                 'ram', 'ftn']
 
@@ -63,8 +63,19 @@ class NumpyDataset(object):
             testdata = []
             testfileid= []
 
+            subch = self.outcome
+            outcome_var = outcome_vars[subch]
+
+            subTpl = os.path.join(datadir, 'submission', "{}SubmissionTemplate.csv".format(outcome_var[:-5]))
+            subTpl = pd.read_csv(subTpl)
+
             for mode in ["training", "test"]:
                 cdtask, ld = self.getCdTasks(mode)
+
+                if subch == 'bra':
+                    # otherwise there will be different number of tasks in training in test
+                    # and combining the metadata from training and test will fail
+                    cdtask = cdtask[cdtask['dataFileHandleId'].isin(subTpl['dataFileHandleId'])]
 
                 nrows = cdtask.shape[0]
                 print("all - nrows={}".format(nrows))
@@ -215,9 +226,20 @@ class NumpyDataset(object):
             testdata = []
             testfileid= []
 
+            subch = self.outcome
+            outcome_var = outcome_vars[subch]
+
+            subTpl = os.path.join(datadir, 'submission', "{}SubmissionTemplate.csv".format(outcome_var[:-5]))
+            subTpl = pd.read_csv(subTpl)
+
             for mode in ["training", "test"]:
 
                 cdtask, ld = self.getCdTasks(mode)
+
+                if subch == 'bra':
+                    # otherwise there will be different number of tasks in training in test
+                    # and combining the metadata from training and test will fail
+                    cdtask = cdtask[cdtask['dataFileHandleId'].isin(subTpl['dataFileHandleId'])]
 
                 data = self.getMetaData(cdtask)
                 #data, keepind = getTimeseriesData(cdtask, ld)
@@ -248,6 +270,7 @@ class NumpyDataset(object):
         tasks = cdtask["task"].values
 
         tsks = np.unique(tasks)
+        print(tsks)
 
         df = pd.DataFrame()
         for t in tsks:
@@ -328,6 +351,9 @@ class NumpyDataset(object):
     def transformDataRotate(self, data):
         return batchRandomRotation(data)
 
+    def transformDataRotateFull(self, data):
+        return batchRandomRotationFull(data)
+
     def transformDataFlipSign(self, data):
         for t in range(data.shape[0]):
             data[t] = np.matmul(data[t], np.diag(np.random.choice([1,-1], 3)))
@@ -362,12 +388,37 @@ class NumpyDataset(object):
                 e[np.random.choice(3, size=3, replace=False)])
         return data
 
+    def transformDataReverse(self, data):
+        idx_flip = np.where(np.random.randint(0, 2, data.shape[0]))
+        data[idx_flip] = np.flip(data[idx_flip], axis=1)
+
+        return data
+
+    def transformDataPermute(self, data):
+        n_permute = 50
+
+        for t in range(data.shape[0]):
+            ind = data[t].reshape(-1, 3, n_permute)
+            np.random.shuffle(ind)
+            data[t] = ind.reshape(data[t].shape)
+
+        return data
+
     def transformDataAll(self, data):
         data = self.transformDataRotate(data)
         data = self.transformDataFlipSign(data)
         data = self.transformDataScaleTimeaxis(data)
         data = self.transformDataScaleMagnitude(data)
    #     data = self.transformDataSwapDims(data)
+
+        return data
+
+    def transformDataAll_v2(self, data):
+        data = self.transformDataRotateFull(data)
+        data = self.transformDataScaleTimeaxis(data)
+        data = self.transformDataScaleMagnitude(data)
+        data = self.transformDataPermute(data)
+        #     data = self.transformDataSwapDims(data)
 
         return data
 
