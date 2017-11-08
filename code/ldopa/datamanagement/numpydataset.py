@@ -389,7 +389,8 @@ class NumpyDataset(object):
         return data
 
     def transformDataReverse(self, data):
-        data = np.flip(data, axis=1)
+        idx_flip = np.where(np.random.randint(0, 2, data.shape[0]))
+        data[idx_flip] = np.flip(data[idx_flip], axis=1)
 
         return data
 
