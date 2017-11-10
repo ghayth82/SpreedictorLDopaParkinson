@@ -1,4 +1,10 @@
-# ParkinsonDream
+# Parkinson's disease DREAM challenge
+[![License: GPL v3](https://img.shields.io/badge/License-GPL%20v3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+This repository contains the code that was used by the team Spreedictors - 
+Wolfgang Kopp (@wkopp) and Gregor Lichtner (@glichtner) - to participate in the 
+LDopa subchallenges of the [Parkinson's disease DREAM challenge](https://www.synapse.org/#!Synapse:syn8717496/wiki/422884).
+
+# LDopa feature extraction for Parkinson's disease DREAM challenge
 ## Requirements
 To run the scripts you need the following software requirements:
 1. Install [Anaconda2-4.4.0](https://www.continuum.io/downloads). 
