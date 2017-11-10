@@ -66,7 +66,7 @@ class NumpyDataset(object):
             subch = self.outcome
             outcome_var = outcome_vars[subch]
 
-            subTpl = os.path.join(datadir, 'submission', "{}SubmissionTemplate.csv".format(outcome_var[:-5]))
+            subTpl = os.path.join('templates', "{}SubmissionTemplate.csv".format(outcome_var[:-5]))
             subTpl = pd.read_csv(subTpl)
 
             for mode in ["training", "test"]:
@@ -229,7 +229,7 @@ class NumpyDataset(object):
             subch = self.outcome
             outcome_var = outcome_vars[subch]
 
-            subTpl = os.path.join(datadir, 'submission', "{}SubmissionTemplate.csv".format(outcome_var[:-5]))
+            subTpl = os.path.join('templates', "{}SubmissionTemplate.csv".format(outcome_var[:-5]))
             subTpl = pd.read_csv(subTpl)
 
             for mode in ["training", "test"]:
@@ -419,6 +419,16 @@ class NumpyDataset(object):
         data = self.transformDataScaleMagnitude(data)
         data = self.transformDataPermute(data)
         #     data = self.transformDataSwapDims(data)
+
+        return data
+
+    def transformDataAll_v3(self, data):
+        data = self.transformDataRotate(data)
+        data = self.transformDataFlipSign(data)
+        data = self.transformDataScaleTimeaxis(data)
+        data = self.transformDataScaleMagnitude(data)
+        data = self.transformDataPermute(data)
+   #     data = self.transformDataSwapDims(data)
 
         return data
 
