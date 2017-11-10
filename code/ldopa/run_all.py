@@ -45,6 +45,9 @@ parser.add_argument('--reverse', dest="reverse",
         default=False, action='store_true', help = "Augment by reversal")
 parser.add_argument('--allaug_v2', dest="allaug_v2",
         default=False, action='store_true', help = "Data augmentation with rotate full, permute, scale time, scale magnitude")
+parser.add_argument('--allaug_v3', dest="allaug_v3",
+        default=False, action='store_true', help = "Data augmentation with rotate full, permute, scale time, scale magnitude")
+
 
 parser.add_argument('--dry', dest="dry",
         default=False, action='store_true', help = "Dryrun to see which combs. are missing.")
@@ -92,6 +95,8 @@ for comb in all_combinations:
         name = '_'.join([name, "permute"])
     if args.allaug_v2:
         name = '_'.join([name, "allaug_v2"])
+    if args.allaug_v3:
+        name = '_'.join([name, "allaug_v3"])
     print(name)
 
 
@@ -131,6 +136,9 @@ for comb in all_combinations:
         if args.allaug_v2:
             comb += ("allaug_v2",)
             da[k].transformData = da[k].transformDataAll_v2
+        if args.allaug_v3:
+            comb += ("allaug_v3",)
+            da[k].transformData = da[k].transformDataAll_v3
 
 
     model = Classifier(da, modeldefs[comb[1]], comb=list(comb), name=name, epochs = args.epochs)
