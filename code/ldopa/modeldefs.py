@@ -1,7 +1,7 @@
-from keras.layers import Input, Dense, Dropout, Concatenate
+from keras.layers import Input, Dense, Dropout, Concatenate, Reshape
 from keras.layers.recurrent import LSTM
-from keras.layers.convolutional import Conv1D
-from keras.layers.pooling import GlobalAveragePooling1D
+from keras.layers.convolutional import Conv1D, Conv2D
+from keras.layers.pooling import GlobalAveragePooling1D, GlobalAveragePooling2D
 from keras.layers.pooling import AveragePooling1D, MaxPooling1D
 from keras.layers.normalization import BatchNormalization
 from keras.layers.noise import GaussianNoise
@@ -185,7 +185,6 @@ def deep_conv(data, paramdims):
     return [input1, input2], output
 
 
-
 def deep_conv_nometa(data, paramdims):
 
     # first input
@@ -312,6 +311,56 @@ def model_logreg(data, paramdims):
 
     return input, output
 
+
+
+def deep_conv7(data, paramdims):
+
+    # first input
+    input1 = Input(shape=data['input_1'].shape, name='input_1')
+    tlayer = Reshape(data['input_1'].shape + (1,))(input1)
+    #1
+    tlayer = Conv2D(paramdims[0], kernel_size=(paramdims[1]),
+            strides=(paramdims[2]), activation='relu')(tlayer)
+    tlayer = BatchNormalization()(tlayer)
+    #l2
+    tlayer = Conv2D(paramdims[3], kernel_size=(paramdims[4]),
+            strides=(paramdims[5]), activation='relu')(tlayer)
+    tlayer = BatchNormalization()(tlayer)
+    #l3
+    tlayer = Conv2D(paramdims[6], kernel_size=(paramdims[7]),
+            strides=(paramdims[8]), activation='relu')(tlayer)
+    tlayer = BatchNormalization()(tlayer)
+    #l4
+    tlayer = Conv2D(paramdims[9], kernel_size=(paramdims[10]),
+            strides=(paramdims[11]), padding='same', activation='relu')(tlayer)
+    tlayer = BatchNormalization()(tlayer)
+    #l5
+    tlayer = Conv2D(paramdims[12], kernel_size=(paramdims[13]),
+            strides=(paramdims[14]), padding='same', activation='relu')(tlayer)
+    tlayer = BatchNormalization()(tlayer)
+    #l6
+    tlayer = Conv2D(paramdims[15], kernel_size=(paramdims[16]),
+            strides=(paramdims[17]), padding='same', activation='relu')(tlayer)
+    tlayer = BatchNormalization()(tlayer)
+    #l7
+    tlayer = Conv2D(paramdims[18], kernel_size=(paramdims[19]),
+            strides=(paramdims[20]), padding='same', activation='relu')(tlayer)
+    tlayer = BatchNormalization()(tlayer)
+
+    tlayer = GlobalAveragePooling2D()(tlayer)
+    #tlayer = Dropout(0.5)(tlayer)
+
+    # second input
+    input2 = Input(shape=data['input_2'].shape, name='input_2')
+    mlayer = Dense(paramdims[21], activation = 'relu')(input2)
+    #mlayer = Dropout(0.5)(mlayer)
+
+    # merge networks
+    layer = Concatenate()([tlayer, mlayer])
+    output = Dense(paramdims[22], activation = 'relu')(layer)
+
+    return [input1, input2], output
+
 modeldefs = {
 #    'conv_30_100': (model_conv_glob, (30,100)),
     'conv_30_200': (model_conv_glob, (30,200)),
@@ -350,6 +399,14 @@ modeldefs = {
     #                                    128, 3, 2,
     #                                    128, 4, 2,
     #                                    10, 20)),
+    'metatime_deep_conv7' : (deep_conv7, (16,(4,1),(3,1),
+                                          32,(4,1),(3,1),
+                                          64,(3,1),(2,1),
+                                          64,(3,3),(2,1),
+                                          64,(3,3),(2,1),
+                                          64,(3,3),(2,1),
+                                          64,(3,1),(1,3),
+                                          10,20)),
     'time_deep_conv': (deep_conv_nometa, (8, 3, 2,
                                        16, 4, 2,
                                        32, 3, 2,
